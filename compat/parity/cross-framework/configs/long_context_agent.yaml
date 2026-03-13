@@ -1,0 +1,28 @@
+name: parity_long_context_agent
+system_prompt: |
+  You are running long context compatibility benchmark.
+  Keep output deterministic.
+tool_call_mode: openai
+max_context_tokens: 700
+max_iterations: 40
+retry_attempts: 1
+timeout: 20
+llm_config:
+  model: mock-model
+  base_url: http://127.0.0.1:18080
+  api_key: mock-key
+  api_type: openai_chat_completion
+  stream: false
+middlewares:
+  - import: nexau.archs.main_sub.execution.middleware.context_compaction:ContextCompactionMiddleware
+    params:
+      compaction_strategy: tool_result_compaction
+      threshold: 0.3
+      keep_iterations: 2
+tools:
+  - name: save_memory
+    yaml_path: ../tools/save_memory.tool.yaml
+    binding: nexau.archs.tool.builtin.session_tools:save_memory
+    as_skill: true
+skills:
+  - ../skills/refactor-checklist

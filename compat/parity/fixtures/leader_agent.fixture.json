@@ -1,0 +1,188 @@
+{
+  "meta": {
+    "baseline_repo": "/Users/yuning/Frontiers/NexAU-latest",
+    "baseline_commit": "eeda8372b6bfec859e5ed6cc1cd39664d2eac4d4",
+    "source_yaml": "examples/nexau_building_team/leader_agent.yaml"
+  },
+  "input": {
+    "env": {
+      "LLM_MODEL": "nex-agi/nex-n1.1",
+      "LLM_BASE_URL": "https://example.com/v1",
+      "LLM_API_KEY": "test-llm-api-key",
+      "LANGFUSE_PUBLIC_KEY": "test-langfuse-public",
+      "LANGFUSE_SECRET_KEY": "test-langfuse-secret",
+      "LANGFUSE_HOST": "https://langfuse.example",
+      "SUMMARY_MODEL": "summary-test-model",
+      "SUMMARY_BASE_URL": "https://summary.example/v1",
+      "SUMMARY_API_KEY": "test-summary-api-key"
+    }
+  },
+  "output": {
+    "schema": {
+      "type": "agent",
+      "name": "team_leader",
+      "system_prompt": "./systemprompt_leader.md",
+      "system_prompt_type": "jinja",
+      "tools": [
+        {
+          "name": "ask_user",
+          "yaml_path": "./tools/ask_user.tool.yaml",
+          "binding": "nexau.archs.tool.builtin.session_tools:ask_user"
+        },
+        {
+          "name": "read_file",
+          "yaml_path": "./tools/read_file.tool.yaml",
+          "binding": "nexau.archs.tool.builtin.file_tools:read_file"
+        },
+        {
+          "name": "write_file",
+          "yaml_path": "./tools/write_file.tool.yaml",
+          "binding": "nexau.archs.tool.builtin.file_tools:write_file"
+        },
+        {
+          "name": "replace",
+          "yaml_path": "./tools/replace.tool.yaml",
+          "binding": "nexau.archs.tool.builtin.file_tools:replace"
+        },
+        {
+          "name": "search_file_content",
+          "yaml_path": "./tools/search_file_content.tool.yaml",
+          "binding": "nexau.archs.tool.builtin.file_tools:search_file_content"
+        },
+        {
+          "name": "glob",
+          "yaml_path": "./tools/Glob.tool.yaml",
+          "binding": "nexau.archs.tool.builtin.file_tools:glob"
+        },
+        {
+          "name": "list_directory",
+          "yaml_path": "./tools/list_directory.tool.yaml",
+          "binding": "nexau.archs.tool.builtin.file_tools:list_directory"
+        },
+        {
+          "name": "run_shell_command",
+          "yaml_path": "./tools/run_shell_command_sync.tool.yaml",
+          "binding": "nexau.archs.tool.builtin.shell_tools:run_shell_command"
+        },
+        {
+          "name": "web_search",
+          "yaml_path": "./tools/WebSearch.tool.yaml",
+          "binding": "nexau.archs.tool.builtin.web_tools:google_web_search"
+        },
+        {
+          "name": "web_read",
+          "yaml_path": "./tools/WebFetch.tool.yaml",
+          "binding": "nexau.archs.tool.builtin.web_tools:web_fetch"
+        },
+        {
+          "name": "write_todos",
+          "yaml_path": "./tools/write_todos.tool.yaml",
+          "binding": "nexau.archs.tool.builtin.session_tools:write_todos"
+        }
+      ],
+      "skills": ["skills/rfc", "skills/nexau-agent", "skills/skill-creator"],
+      "llm_config": {
+        "model": "nex-agi/nex-n1.1",
+        "base_url": "https://example.com/v1",
+        "api_key": "test-llm-api-key",
+        "max_tokens": 16000,
+        "stream": true,
+        "api_type": "openai_responses",
+        "reasoning": {
+          "effort": "medium",
+          "summary": "detailed"
+        }
+      },
+      "stop_tools": ["ask_user"],
+      "mcp_servers": [],
+      "middlewares": [
+        {
+          "import": "nexau.archs.main_sub.execution.middleware.context_compaction:ContextCompactionMiddleware",
+          "params": {
+            "max_context_tokens": 200000,
+            "auto_compact": true,
+            "threshold": 0.75,
+            "compaction_strategy": "llm_summary",
+            "keep_iterations": 2,
+            "summary_model": "summary-test-model",
+            "summary_base_url": "https://summary.example/v1",
+            "summary_api_key": "test-summary-api-key",
+            "compact_prompt_path": "compact_prompt.md"
+          }
+        }
+      ],
+      "global_storage": {},
+      "max_context_tokens": 200000,
+      "max_running_subagents": 5,
+      "max_iterations": 10000,
+      "tool_call_mode": "openai",
+      "retry_attempts": 5,
+      "timeout": 300,
+      "tracers": [
+        {
+          "import": "nexau.archs.tracer.adapters.langfuse:LangfuseTracer",
+          "params": {
+            "public_key": "test-langfuse-public",
+            "secret_key": "test-langfuse-secret",
+            "host": "https://langfuse.xiaobei.top/"
+          }
+        }
+      ]
+    },
+    "finalized_summary": {
+      "name": "team_leader",
+      "tool_call_mode": "openai",
+      "max_context_tokens": 200000,
+      "max_iterations": 10000,
+      "stop_tools": ["ask_user"],
+      "resolved_system_prompt": "/Users/yuning/Frontiers/NexAU-latest/examples/nexau_building_team/systemprompt_leader.md",
+      "system_prompt_type": "jinja",
+      "tools_count": 12,
+      "skills_count": 3,
+      "sub_agents": [],
+      "tracers_count": 1,
+      "has_middlewares": true,
+      "llm_config": {
+        "model": "nex-agi/nex-n1.1",
+        "base_url": "https://example.com/v1",
+        "api_type": "openai_responses",
+        "stream": true,
+        "max_tokens": 16000,
+        "temperature": null,
+        "extra_params": {
+          "reasoning": {
+            "effort": "medium",
+            "summary": "detailed"
+          }
+        }
+      }
+    },
+    "event_stream": [
+      {
+        "type": "config.parse.started",
+        "payload": {
+          "path": "examples/nexau_building_team/leader_agent.yaml"
+        }
+      },
+      {
+        "type": "config.schema.validated",
+        "payload": {
+          "name": "team_leader",
+          "tool_count": 11,
+          "skill_count": 3,
+          "sub_agent_config_count": 0
+        }
+      },
+      {
+        "type": "config.finalized",
+        "payload": {
+          "name": "team_leader",
+          "tool_count": 12,
+          "skill_count": 3,
+          "sub_agent_count": 0,
+          "stop_tools": ["ask_user"]
+        }
+      }
+    ]
+  }
+}

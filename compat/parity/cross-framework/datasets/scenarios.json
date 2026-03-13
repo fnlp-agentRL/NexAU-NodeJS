@@ -1,0 +1,448 @@
+{
+  "prompt_toolcall": {
+    "name": "prompt_toolcall",
+    "user_message": "请先查看当前目录与项目笔记，再保存一条记忆，最后给出简要结论。",
+    "responses": [
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "call_1",
+            "name": "list_directory",
+            "arguments": {
+              "dir_path": "compat/parity/cross-framework/files"
+            }
+          },
+          {
+            "id": "call_2",
+            "name": "read_file",
+            "arguments": {
+              "file_path": "compat/parity/cross-framework/files/project_notes.md",
+              "offset": 0,
+              "limit": 40
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "call_3",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "project notes mention parity and stable tool-call schema"
+            }
+          }
+        ]
+      },
+      {
+        "content": "目录浏览、笔记读取和记忆保存都已完成。",
+        "tool_calls": []
+      }
+    ]
+  },
+  "prompt_toolcall_extended": {
+    "name": "prompt_toolcall_extended",
+    "user_message": "先查看目录和项目笔记，再保存两条记忆，最后输出一段一句话总结。",
+    "responses": [
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "ext_call_1",
+            "name": "list_directory",
+            "arguments": {
+              "dir_path": "compat/parity/cross-framework/files"
+            }
+          },
+          {
+            "id": "ext_call_2",
+            "name": "read_file",
+            "arguments": {
+              "file_path": "compat/parity/cross-framework/files/project_notes.md",
+              "offset": 1,
+              "limit": 20
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "ext_call_3",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "extended case: read context before writing memory"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "ext_call_4",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "extended case: multi-tool multi-round parity must be stable"
+            }
+          }
+        ]
+      },
+      {
+        "content": "扩展场景执行完成，文件读取与双记忆写入均成功。",
+        "tool_calls": []
+      }
+    ]
+  },
+  "long_context": {
+    "name": "long_context",
+    "user_message": "请持续调用工具并在最后结束。",
+    "max_iterations": 40,
+    "max_context_tokens": 700,
+    "responses": [
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_1",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0001_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_2",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0002_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_3",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0003_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_4",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0004_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_5",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0005_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_6",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0006_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_7",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0007_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_8",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0008_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_9",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0009_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_10",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0010_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_11",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0011_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_12",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0012_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_13",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0013_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_14",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0014_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_15",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0015_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_16",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0016_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_17",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0017_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_18",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0018_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_19",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0019_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_20",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0020_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_21",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0021_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_22",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0022_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_23",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0023_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_24",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0024_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_25",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0025_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_26",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0026_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_27",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0027_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "lc_call_28",
+            "name": "save_memory",
+            "arguments": {
+              "fact": "long_context_fact_0028_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ]
+      },
+      {
+        "content": "长上下文测试结束。",
+        "tool_calls": []
+      }
+    ]
+  }
+}

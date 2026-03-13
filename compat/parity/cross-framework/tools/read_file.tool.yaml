@@ -1,0 +1,18 @@
+type: tool
+name: read_file
+description: Read text file content.
+input_schema:
+  type: object
+  properties:
+    file_path:
+      type: string
+      description: File path.
+    offset:
+      type: integer
+      minimum: 0
+    limit:
+      type: integer
+      minimum: 1
+  required:
+    - file_path
+  additionalProperties: false

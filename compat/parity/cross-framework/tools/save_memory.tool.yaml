@@ -1,0 +1,13 @@
+type: tool
+name: save_memory
+description: Save memory fact.
+skill_description: Store one durable user/project fact for later rounds.
+input_schema:
+  type: object
+  properties:
+    fact:
+      type: string
+      description: Memory sentence.
+  required:
+    - fact
+  additionalProperties: false

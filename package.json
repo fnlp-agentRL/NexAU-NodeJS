@@ -1,0 +1,42 @@
+{
+  "name": "nexau-nodejs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Node.js/TypeScript compatibility rewrite for NexAU",
+  "bin": {
+    "nexau": "dist/cli/main.js"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "format": "oxfmt --write",
+    "format:check": "oxfmt --check",
+    "lint": "oxlint --type-aware",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest",
+    "parity:cross": "python3 compat/parity/cross-framework/run_compare.py",
+    "parity:cross:check": "python3 compat/parity/cross-framework/run_compare.py --check --skip-if-baseline-missing",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test"
+  },
+  "dependencies": {
+    "ajv": "^8.18.0",
+    "commander": "^14.0.2",
+    "minimatch": "^10.2.4",
+    "yaml": "^2.8.1",
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "@vitest/coverage-v8": "^4.0.0",
+    "oxfmt": "^0.35.0",
+    "oxlint": "^1.50.0",
+    "oxlint-tsgolint": "^0.16.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.23.0"
+}

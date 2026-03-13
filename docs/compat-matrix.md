@@ -1,0 +1,30 @@
+# NexAU Compatibility Matrix
+
+Baseline commit: `eeda8372b6bfec859e5ed6cc1cd39664d2eac4d4` from `NexAU-latest`.
+
+## P0 (Must Match)
+
+| Area            | Item                                                    | Status | Notes                                                                       |
+| --------------- | ------------------------------------------------------- | ------ | --------------------------------------------------------------------------- |
+| Config load     | YAML parse + `${env.X}`                                 | Done   | `loadYamlWithVars` implements env replacement and strict errors.            |
+| Config load     | `${this_file_dir}`                                      | Done   | Replaced before YAML parse, same as Python behavior.                        |
+| Config load     | `${variables.foo}`                                      | Done   | Two-pass parse with scalar-only substitution and error parity.              |
+| Agent config    | `llm_config` required                                   | Done   | Strict schema with path-aware validation errors.                            |
+| Agent config    | `tool_call_mode` normalize/validate                     | Done   | Supports `xml/openai/anthropic`, case-insensitive.                          |
+| Agent config    | `system_prompt` path resolve for `file/jinja`           | Done   | Relative path -> absolute path with existence check.                        |
+| Agent config    | `stop_tools` finalize                                   | Done   | Stored as `Set<string>` for fast lookup.                                    |
+| Agent config    | defaults (`max_context_tokens`, `max_iterations`, etc.) | Done   | Mirrors Python defaults for phase-1 fields.                                 |
+| Agent config    | `sub_agents` recursive load                             | Done   | Recursively resolves `config_path` and detects recursion loops.             |
+| Parity baseline | Fixtures (input/output/event stream)                    | Done   | Generated from Python runtime into `compat/parity/fixtures/*.fixture.json`. |
+
+## P1 (Planned Next)
+
+| Area          | Item                               | Status | Notes                                                                                                                     |
+| ------------- | ---------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Tool model    | `Tool.fromYaml()` + schema         | Done   | Added YAML loader, schema validator, parameter validator, protocol adapters, and parallel/serial execution gating.        |
+| Builtin tools | file/shell/web/session minimal set | Done   | Added first batch builtin implementations with Python binding-string compatibility.                                       |
+| Executor      | llm-tool loop + stop_tools runtime | Done   | Added `AgentExecutor` with tool loop, stop tools, retry/timeout, context compaction, and sub-agent closure.               |
+| Transport     | chat/http/stdio                    | Done   | Added Commander CLI `chat`, HTTP `/query` + `/stream` + `/health` + `/info`, and STDIO json-lines query/stream.           |
+| Session       | persistent session store           | Done   | Added sqlite `SessionManager` with `user/session/agent` keys, WAL mode, upsert persistence, and isolation tests.          |
+| Extensibility | middleware/tracer/mcp full chain   | Done   | Added middleware pipeline, tracer interface + Langfuse adapter, and MCP tool discovery/invocation (HTTP + stdio).         |
+| Phase7        | core examples + regressions        | Done   | Added table-driven phase7 regression for code_agent/deep_research/leader_agent, compatibility diff docs, and CI workflow. |

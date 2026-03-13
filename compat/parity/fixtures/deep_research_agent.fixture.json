@@ -1,0 +1,144 @@
+{
+  "meta": {
+    "baseline_repo": "/Users/yuning/Frontiers/NexAU-latest",
+    "baseline_commit": "eeda8372b6bfec859e5ed6cc1cd39664d2eac4d4",
+    "source_yaml": "examples/deep_research/deep_research_agent.yaml"
+  },
+  "input": {
+    "env": {
+      "LLM_MODEL": "nex-agi/nex-n1.1",
+      "LLM_BASE_URL": "https://example.com/v1",
+      "LLM_API_KEY": "test-llm-api-key",
+      "LANGFUSE_PUBLIC_KEY": "test-langfuse-public",
+      "LANGFUSE_SECRET_KEY": "test-langfuse-secret",
+      "LANGFUSE_HOST": "https://langfuse.example",
+      "SUMMARY_MODEL": "summary-test-model",
+      "SUMMARY_BASE_URL": "https://summary.example/v1",
+      "SUMMARY_API_KEY": "test-summary-api-key"
+    }
+  },
+  "output": {
+    "schema": {
+      "type": "agent",
+      "name": "deep_research_agent",
+      "system_prompt": "Date: {{date}}. You are a deep research agent. You are given a message and you need to search for the information that matches the message. Use the web_search and web_read tools to get the information. Wait for the web_read tool to finish before you continue your response. Use RecallSubAgent to ask a new question to an old sub-agent.",
+      "system_prompt_type": "string",
+      "tools": [
+        {
+          "name": "web_search",
+          "yaml_path": "./tools/WebSearch.yaml",
+          "binding": "nexau.archs.tool.builtin.web_tools:google_web_search",
+          "as_skill": true
+        },
+        {
+          "name": "web_read",
+          "yaml_path": "./tools/WebRead.yaml",
+          "binding": "nexau.archs.tool.builtin.web_tools:web_fetch",
+          "as_skill": true
+        },
+        {
+          "name": "todo_write",
+          "yaml_path": "./tools/TodoWrite.tool.yaml",
+          "binding": "nexau.archs.tool.builtin.session_tools:write_todos"
+        },
+        {
+          "name": "file_write",
+          "yaml_path": "./tools/Write.tool.yaml",
+          "binding": "nexau.archs.tool.builtin.file_tools:write_file",
+          "as_skill": true
+        }
+      ],
+      "sub_agents": [
+        {
+          "name": "sub_deep_research_agent",
+          "config_path": "subagent.yaml"
+        }
+      ],
+      "skills": ["./skills/algorithmic-art"],
+      "llm_config": {
+        "temperature": 0.7,
+        "max_tokens": 4096,
+        "api_type": "openai_chat_completion"
+      },
+      "stop_tools": [],
+      "mcp_servers": [],
+      "middlewares": [
+        {
+          "import": "nexau.archs.main_sub.execution.hooks:LoggingMiddleware",
+          "params": {
+            "model_logger": "nexau_deep_research_model_debug",
+            "tool_logger": "nexau_deep_research_tool_debug",
+            "log_model_calls": true
+          }
+        }
+      ],
+      "global_storage": {},
+      "max_context_tokens": 1000000,
+      "max_running_subagents": 5,
+      "max_iterations": 100,
+      "tool_call_mode": "openai",
+      "retry_attempts": 5,
+      "timeout": 300,
+      "tracers": [
+        {
+          "import": "nexau.archs.tracer.adapters.langfuse:LangfuseTracer",
+          "params": {
+            "public_key": "test-langfuse-public",
+            "secret_key": "test-langfuse-secret",
+            "host": "https://langfuse.example"
+          }
+        }
+      ]
+    },
+    "finalized_summary": {
+      "name": "deep_research_agent",
+      "tool_call_mode": "openai",
+      "max_context_tokens": 1000000,
+      "max_iterations": 100,
+      "stop_tools": [],
+      "resolved_system_prompt": "Date: {{date}}. You are a deep research agent. You are given a message and you need to search for the information that matches the message. Use the web_search and web_read tools to get the information. Wait for the web_read tool to finish before you continue your response. Use RecallSubAgent to ask a new question to an old sub-agent.",
+      "system_prompt_type": "string",
+      "tools_count": 6,
+      "skills_count": 4,
+      "sub_agents": ["deep_research_agent"],
+      "tracers_count": 1,
+      "has_middlewares": true,
+      "llm_config": {
+        "model": "nex-agi/nex-n1.1",
+        "base_url": "https://example.com/v1",
+        "api_type": "openai_chat_completion",
+        "stream": false,
+        "max_tokens": 4096,
+        "temperature": 0.7,
+        "extra_params": {}
+      }
+    },
+    "event_stream": [
+      {
+        "type": "config.parse.started",
+        "payload": {
+          "path": "examples/deep_research/deep_research_agent.yaml"
+        }
+      },
+      {
+        "type": "config.schema.validated",
+        "payload": {
+          "name": "deep_research_agent",
+          "tool_count": 4,
+          "skill_count": 1,
+          "sub_agent_config_count": 1
+        }
+      },
+      {
+        "type": "config.finalized",
+        "payload": {
+          "name": "deep_research_agent",
+          "tool_count": 6,
+          "skill_count": 4,
+          "sub_agent_count": 1,
+          "stop_tools": []
+        }
+      }
+    ]
+  }
+}

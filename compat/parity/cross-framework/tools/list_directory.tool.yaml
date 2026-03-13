@@ -1,0 +1,18 @@
+type: tool
+name: list_directory
+description: List files under a directory.
+input_schema:
+  type: object
+  properties:
+    dir_path:
+      type: string
+      description: Directory path.
+    ignore:
+      type: array
+      items:
+        type: string
+    show_hidden:
+      type: boolean
+  required:
+    - dir_path
+  additionalProperties: false
