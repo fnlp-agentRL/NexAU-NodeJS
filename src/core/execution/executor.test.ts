@@ -152,6 +152,37 @@ describe("AgentExecutor", () => {
     expect(result.iterations).toBe(1);
   });
 
+  it("emits prompt/tool token estimates in llm.requested", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-executor-token-"));
+    buildToolYaml(dir);
+    const configPath = buildAgentYaml(dir);
+
+    const config = AgentConfig.fromYaml(configPath);
+    const scripted = new ScriptedLLMClient([
+      {
+        content: "final answer",
+      },
+    ]);
+
+    const executor = new AgentExecutor({
+      createLLMClient: () => scripted,
+    });
+
+    const result = await executor.execute({
+      agent: config,
+      input: "hello",
+    });
+
+    const requested = result.events.find((event) => event.type === "llm.requested");
+    expect(requested).toBeTruthy();
+    expect(typeof requested?.payload.prompt_tokens_estimated).toBe("number");
+    expect(typeof requested?.payload.prompt_tool_tokens_estimated).toBe("number");
+    expect(typeof requested?.payload.prompt_message_tokens_estimated).toBe("number");
+    expect(Number(requested?.payload.prompt_tokens_estimated)).toBeGreaterThan(0);
+    expect(Number(requested?.payload.prompt_tool_tokens_estimated)).toBeGreaterThan(0);
+    expect(Number(requested?.payload.prompt_message_tokens_estimated)).toBeGreaterThan(0);
+  });
+
   it("runs tool loop and returns final llm output", async () => {
     const dir = mkdtempSync(join(tmpdir(), "nexau-executor-tool-"));
     buildToolYaml(dir);

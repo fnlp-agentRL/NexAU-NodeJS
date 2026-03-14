@@ -260,4 +260,55 @@ describe("RuntimeService sessions", () => {
 
     await manager.close();
   });
+
+  it("clears session history and agent state by user/session", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-runtime-clear-session-"));
+    const dbPath = join(dir, "sessions.db");
+    const config = AgentConfig.fromYaml(createConfig(dir, "agent_clear"));
+
+    const agent = new Agent(config, {
+      createLLMClient: () => ({
+        async complete(input) {
+          return {
+            content: `count=${input.messages.length}`,
+          };
+        },
+      }),
+    });
+
+    const manager = new SqliteSessionManager(dbPath);
+    const runtime = new RuntimeService(agent, manager);
+
+    const first = await runtime.query({
+      input: "hello",
+      user_id: "u",
+      session_id: "s",
+    });
+    const second = await runtime.query({
+      input: "again",
+      user_id: "u",
+      session_id: "s",
+    });
+    const beforeCount = Number(first.output.split("=")[1]);
+    const afterCount = Number(second.output.split("=")[1]);
+    expect(afterCount).toBeGreaterThan(beforeCount);
+
+    const cleared = await runtime.clearSession({
+      user_id: "u",
+      session_id: "s",
+    });
+    expect(cleared.user_id).toBe("u");
+    expect(cleared.session_id).toBe("s");
+    expect(cleared.cleared_rows).toBeGreaterThan(0);
+
+    const third = await runtime.query({
+      input: "fresh",
+      user_id: "u",
+      session_id: "s",
+    });
+    const refreshedCount = Number(third.output.split("=")[1]);
+    expect(refreshedCount).toBe(beforeCount);
+
+    await manager.close();
+  });
 });

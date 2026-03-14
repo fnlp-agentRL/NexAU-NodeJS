@@ -8,6 +8,7 @@ export interface SessionState {
 export interface SessionManager {
   get(userId: string, sessionId: string, agentId: string): Promise<SessionState>;
   set(userId: string, sessionId: string, agentId: string, state: SessionState): Promise<void>;
+  delete(userId: string, sessionId: string, agentId: string): Promise<number>;
 }
 
 function key(userId: string, sessionId: string, agentId: string): string {
@@ -39,5 +40,9 @@ export class InMemorySessionManager implements SessionManager {
     state: SessionState,
   ): Promise<void> {
     this.store.set(key(userId, sessionId, agentId), state);
+  }
+
+  public async delete(userId: string, sessionId: string, agentId: string): Promise<number> {
+    return this.store.delete(key(userId, sessionId, agentId)) ? 1 : 0;
   }
 }

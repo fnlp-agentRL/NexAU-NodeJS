@@ -163,6 +163,18 @@ export class SqliteSessionManager implements SessionManager {
     });
   }
 
+  public async delete(userId: string, sessionId: string, agentId: string): Promise<number> {
+    return this.withLock(() => {
+      const statement = this.db.prepare(
+        "DELETE FROM sessions WHERE user_id = ? AND session_id = ? AND agent_id = ?",
+      );
+      const result = statement.run(userId, sessionId, agentId) as
+        | { changes?: number }
+        | undefined;
+      return typeof result?.changes === "number" ? result.changes : 0;
+    });
+  }
+
   public async close(): Promise<void> {
     await this.withLock(() => {
       this.db.close();

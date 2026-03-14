@@ -45,6 +45,54 @@ function estimateContextTokens(messages: ChatMessage[]): number {
   return messages.reduce((sum, message) => sum + estimateMessageTokens(message), 0);
 }
 
+function estimateSerializedTokens(value: unknown): {
+  chars: number;
+  tokens: number;
+} {
+  const serialized = (() => {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  })();
+
+  const chars = serialized.length;
+  // Lightweight approximation: around 2.5 chars per token for mixed payload.
+  const tokens = Math.max(1, Math.ceil(chars / 2.5));
+  return { chars, tokens };
+}
+
+function estimatePromptTokenUsage(
+  messages: ChatMessage[],
+  tools: Array<Record<string, unknown>>,
+): {
+  promptTokens: number;
+  messageTokens: number;
+  toolTokens: number;
+  promptChars: number;
+  messageChars: number;
+  toolChars: number;
+} {
+  const messageUsage = estimateSerializedTokens(messages);
+  const toolUsage =
+    tools.length === 0
+      ? {
+          chars: 0,
+          tokens: 0,
+        }
+      : estimateSerializedTokens(tools);
+
+  return {
+    promptTokens: messageUsage.tokens + toolUsage.tokens,
+    messageTokens: messageUsage.tokens,
+    toolTokens: toolUsage.tokens,
+    promptChars: messageUsage.chars + toolUsage.chars,
+    messageChars: messageUsage.chars,
+    toolChars: toolUsage.chars,
+  };
+}
+
 function compactMessages(
   messages: ChatMessage[],
   maxTokens: number,
@@ -676,6 +724,7 @@ export class AgentExecutor {
       }
 
       const tools = buildStructuredToolPayload(agent);
+      const tokenUsage = estimatePromptTokenUsage(messages, tools);
 
       emit({
         type: "llm.requested",
@@ -683,6 +732,12 @@ export class AgentExecutor {
           iteration,
           message_count: messages.length,
           tool_count: tools.length,
+          prompt_tokens_estimated: tokenUsage.promptTokens,
+          prompt_message_tokens_estimated: tokenUsage.messageTokens,
+          prompt_tool_tokens_estimated: tokenUsage.toolTokens,
+          prompt_chars_estimated: tokenUsage.promptChars,
+          prompt_message_chars_estimated: tokenUsage.messageChars,
+          prompt_tool_chars_estimated: tokenUsage.toolChars,
         },
       });
 

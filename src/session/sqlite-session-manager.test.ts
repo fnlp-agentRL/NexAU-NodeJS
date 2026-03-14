@@ -100,4 +100,32 @@ describe("SqliteSessionManager", () => {
 
     await manager.close();
   });
+
+  it("deletes one agent session without affecting others", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-sqlite-session-delete-"));
+    const manager = new SqliteSessionManager(join(dir, "sessions.db"));
+
+    await manager.set("u", "s", "agent-a", {
+      history: [{ role: "user", content: "from-a" }],
+      agentState: { owner: "a" },
+    });
+    await manager.set("u", "s", "agent-b", {
+      history: [{ role: "user", content: "from-b" }],
+      agentState: { owner: "b" },
+    });
+
+    const deleted = await manager.delete("u", "s", "agent-a");
+    expect(deleted).toBe(1);
+
+    const aState = await manager.get("u", "s", "agent-a");
+    const bState = await manager.get("u", "s", "agent-b");
+
+    expect(aState).toEqual({
+      history: [],
+      agentState: {},
+    });
+    expect(bState.history[0]?.content).toBe("from-b");
+
+    await manager.close();
+  });
 });

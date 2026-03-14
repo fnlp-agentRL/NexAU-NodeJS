@@ -12,6 +12,11 @@ export interface RuntimeRequest {
   signal?: AbortSignal;
 }
 
+export interface RuntimeSessionIdentity {
+  user_id?: string;
+  session_id?: string;
+}
+
 export interface RuntimeResponse {
   status: ExecutionResult["status"];
   output: string;
@@ -131,6 +136,29 @@ export class RuntimeService {
       max_context_tokens: this.agent.config.max_context_tokens,
       tool_call_mode: this.agent.config.tool_call_mode,
       tool_count: this.agent.config.tools.length,
+    };
+  }
+
+  public async clearSession(identity: RuntimeSessionIdentity): Promise<{
+    user_id: string;
+    session_id: string;
+    cleared_rows: number;
+    agent_session_id: string;
+  }> {
+    const userId = identity.user_id ?? "default-user";
+    const sessionId = identity.session_id ?? "default-session";
+    const agentIds = new Set([this.agentSessionId, this.agent.config.name]);
+
+    let clearedRows = 0;
+    for (const agentId of agentIds) {
+      clearedRows += await this.sessionManager.delete(userId, sessionId, agentId);
+    }
+
+    return {
+      user_id: userId,
+      session_id: sessionId,
+      cleared_rows: clearedRows,
+      agent_session_id: this.agentSessionId,
     };
   }
 }
