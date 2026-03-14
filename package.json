@@ -6,7 +6,19 @@
   "bin": {
     "nexau": "dist/cli/main.js"
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "format": "oxfmt --write",

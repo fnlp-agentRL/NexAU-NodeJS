@@ -311,4 +311,78 @@ describe("RuntimeService sessions", () => {
 
     await manager.close();
   });
+
+  it("returns cleared_rows=0 for missing default session", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-runtime-clear-default-empty-"));
+    const dbPath = join(dir, "sessions.db");
+    const config = AgentConfig.fromYaml(createConfig(dir, "agent_clear_empty"));
+
+    const agent = new Agent(config, {
+      createLLMClient: () => ({
+        async complete(input) {
+          return {
+            content: `count=${input.messages.length}`,
+          };
+        },
+      }),
+    });
+
+    const manager = new SqliteSessionManager(dbPath);
+    const runtime = new RuntimeService(agent, manager);
+    const cleared = await runtime.clearSession({});
+
+    expect(cleared.user_id).toBe("default-user");
+    expect(cleared.session_id).toBe("default-session");
+    expect(cleared.cleared_rows).toBe(0);
+
+    await manager.close();
+  });
+
+  it("clears both hashed and legacy agent session keys", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-runtime-clear-legacy-"));
+    const dbPath = join(dir, "sessions.db");
+    const config = AgentConfig.fromYaml(createConfig(dir, "agent_clear_legacy"));
+
+    const agent = new Agent(config, {
+      createLLMClient: () => ({
+        async complete(input) {
+          return {
+            content: `count=${input.messages.length}`,
+          };
+        },
+      }),
+    });
+
+    const manager = new SqliteSessionManager(dbPath);
+    const runtime = new RuntimeService(agent, manager);
+
+    const agentSessionId = runtime.getInfo().agent_session_id as string;
+    await manager.set("u", "s", agentSessionId, {
+      history: [{ role: "user", content: "from-hash" }],
+      agentState: { source: "hash" },
+    });
+    await manager.set("u", "s", config.name, {
+      history: [{ role: "user", content: "from-legacy" }],
+      agentState: { source: "legacy" },
+    });
+
+    const cleared = await runtime.clearSession({
+      user_id: "u",
+      session_id: "s",
+    });
+    expect(cleared.cleared_rows).toBe(2);
+
+    const hashedState = await manager.get("u", "s", agentSessionId);
+    const legacyState = await manager.get("u", "s", config.name);
+    expect(hashedState).toEqual({
+      history: [],
+      agentState: {},
+    });
+    expect(legacyState).toEqual({
+      history: [],
+      agentState: {},
+    });
+
+    await manager.close();
+  });
 });
