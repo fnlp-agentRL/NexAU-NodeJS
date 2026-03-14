@@ -15,8 +15,10 @@
 
 1. 新项目**不引入原版 `openclaw` npm 包**。
 2. 新项目会安装并使用：
+
 - 当前本地 `NexAU-NodeJS`
 - `@larksuite/openclaw-lark`
+
 3. 新项目除真实飞书入口外，还提供一套 **HTTP 伪装飞书消息入口**，用于压测、回放、联调和故障复现。
 
 ## 2. 结论与总体方案
@@ -415,4 +417,3 @@ Runtime 不负责：
 1. 先实现 `apps/gateway` 的三入口统一管线（WS/Webhook/HTTP 模拟）。
 2. 再实现 `apps/runtime` 的 NexAU 最小闭环（1 个工具即可）。
 3. 最后批量接入 openclaw-lark 的六大工具域。
-

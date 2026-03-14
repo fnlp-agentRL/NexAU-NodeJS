@@ -168,9 +168,7 @@ export class SqliteSessionManager implements SessionManager {
       const statement = this.db.prepare(
         "DELETE FROM sessions WHERE user_id = ? AND session_id = ? AND agent_id = ?",
       );
-      const result = statement.run(userId, sessionId, agentId) as
-        | { changes?: number }
-        | undefined;
+      const result = statement.run(userId, sessionId, agentId) as { changes?: number } | undefined;
       return typeof result?.changes === "number" ? result.changes : 0;
     });
   }
