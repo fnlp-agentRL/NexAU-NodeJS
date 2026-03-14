@@ -64,6 +64,14 @@ function buildTraceback(error: unknown): string {
   return String(error);
 }
 
+function hasSchemaCombinator(schema: Record<string, unknown>): boolean {
+  return (
+    Array.isArray(schema.anyOf) ||
+    Array.isArray(schema.oneOf) ||
+    Array.isArray(schema.allOf)
+  );
+}
+
 type CompiledValidator = ((data: unknown) => boolean) & { errors?: unknown[] | null };
 type AjvLike = {
   validateSchema: (schema: unknown) => boolean;
@@ -220,6 +228,19 @@ export class Tool {
   }
 
   public validateParams(params: Record<string, unknown>): void {
+    // For combinator schemas (anyOf/oneOf/allOf), validating a property-filtered
+    // object may drop discriminator fields like `action`, causing false failures.
+    if (hasSchemaCombinator(this.inputSchema)) {
+      const valid = this.paramsValidator(params);
+      if (!valid) {
+        const detail = this.schemaValidator.errorsText(this.paramsValidator.errors ?? []);
+        throw new Error(
+          `Invalid parameters for tool '${this.name}': ${detail}. params=${JSON.stringify(params)}`,
+        );
+      }
+      return;
+    }
+
     const schemaProperties =
       typeof this.inputSchema.properties === "object" && this.inputSchema.properties
         ? (this.inputSchema.properties as Record<string, unknown>)

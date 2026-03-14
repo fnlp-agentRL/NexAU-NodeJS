@@ -68,6 +68,22 @@ function toOpenAIMessages(messages: ChatMessage[]): Array<Record<string, unknown
       };
     }
 
+    if (message.role === "assistant" && Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
+      return {
+        role: "assistant",
+        content:
+          message.content.length === 0 || message.content === "null" ? null : message.content,
+        tool_calls: message.tool_calls.map((toolCall) => ({
+          id: toolCall.id,
+          type: "function",
+          function: {
+            name: toolCall.name,
+            arguments: JSON.stringify(toolCall.arguments ?? {}),
+          },
+        })),
+      };
+    }
+
     return {
       role: message.role,
       content: message.content,

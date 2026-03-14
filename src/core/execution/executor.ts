@@ -171,6 +171,62 @@ function serializeToolPayload(payload: Record<string, unknown>): string {
   return JSON.stringify(payload, null, 2);
 }
 
+function truncateString(value: string, maxLength: number): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+  return `${value.slice(0, maxLength)}...<truncated>`;
+}
+
+function summarizeToolResultForEvent(
+  toolResult: Record<string, unknown>,
+): {
+  hasError: boolean;
+  error?: string;
+  errorType?: string;
+  traceback?: string;
+  toolResultPreview: string;
+} {
+  const hasError = "error" in toolResult;
+  const errorRaw = toolResult.error;
+  const errorTypeRaw = toolResult.error_type;
+  const tracebackRaw = toolResult.traceback;
+
+  const error =
+    typeof errorRaw === "string"
+      ? errorRaw
+      : errorRaw !== undefined
+        ? truncateString(String(errorRaw), 2000)
+        : undefined;
+  const errorType =
+    typeof errorTypeRaw === "string"
+      ? errorTypeRaw
+      : errorTypeRaw !== undefined
+        ? truncateString(String(errorTypeRaw), 500)
+        : undefined;
+  const traceback =
+    typeof tracebackRaw === "string"
+      ? truncateString(tracebackRaw, 6000)
+      : tracebackRaw !== undefined
+        ? truncateString(String(tracebackRaw), 6000)
+        : undefined;
+
+  let toolResultPreview = "";
+  try {
+    toolResultPreview = truncateString(JSON.stringify(toolResult), 6000);
+  } catch {
+    toolResultPreview = truncateString(String(toolResult), 6000);
+  }
+
+  return {
+    hasError,
+    ...(error !== undefined ? { error } : {}),
+    ...(errorType !== undefined ? { errorType } : {}),
+    ...(traceback !== undefined ? { traceback } : {}),
+    toolResultPreview,
+  };
+}
+
 function resolveStructuredToolDescription(tool: AgentConfig["tools"][number]): string {
   if (tool.asSkill) {
     if (!tool.skillDescription) {
@@ -678,6 +734,7 @@ export class AgentExecutor {
       messages.push({
         role: "assistant",
         content: assistantContent,
+        ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
       });
 
       emit({
@@ -795,6 +852,7 @@ export class AgentExecutor {
       for (let index = 0; index < toolCalls.length; index += 1) {
         const toolCall = toolCalls[index]!;
         const toolResult = toolResults[index]!;
+        const toolSummary = summarizeToolResultForEvent(toolResult);
         lastToolResult = toolResult;
 
         messages.push({
@@ -809,7 +867,13 @@ export class AgentExecutor {
             iteration,
             tool_name: toolCall.name,
             tool_call_id: toolCall.id,
-            has_error: "error" in toolResult,
+            has_error: toolSummary.hasError,
+            ...(toolSummary.error !== undefined ? { error: toolSummary.error } : {}),
+            ...(toolSummary.errorType !== undefined
+              ? { error_type: toolSummary.errorType }
+              : {}),
+            ...(toolSummary.traceback !== undefined ? { traceback: toolSummary.traceback } : {}),
+            tool_result_preview: toolSummary.toolResultPreview,
           },
         });
 
