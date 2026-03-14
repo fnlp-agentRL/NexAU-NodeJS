@@ -4,7 +4,7 @@
   "private": true,
   "description": "Node.js/TypeScript compatibility rewrite for NexAU",
   "bin": {
-    "nexau": "dist/cli/main.js"
+    "nexau": "bin/nexau.js"
   },
   "type": "module",
   "main": "dist/index.js",
