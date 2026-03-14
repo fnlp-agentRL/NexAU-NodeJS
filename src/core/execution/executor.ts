@@ -178,9 +178,7 @@ function truncateString(value: string, maxLength: number): string {
   return `${value.slice(0, maxLength)}...<truncated>`;
 }
 
-function summarizeToolResultForEvent(
-  toolResult: Record<string, unknown>,
-): {
+function summarizeToolResultForEvent(toolResult: Record<string, unknown>): {
   hasError: boolean;
   error?: string;
   errorType?: string;
@@ -869,9 +867,7 @@ export class AgentExecutor {
             tool_call_id: toolCall.id,
             has_error: toolSummary.hasError,
             ...(toolSummary.error !== undefined ? { error: toolSummary.error } : {}),
-            ...(toolSummary.errorType !== undefined
-              ? { error_type: toolSummary.errorType }
-              : {}),
+            ...(toolSummary.errorType !== undefined ? { error_type: toolSummary.errorType } : {}),
             ...(toolSummary.traceback !== undefined ? { traceback: toolSummary.traceback } : {}),
             tool_result_preview: toolSummary.toolResultPreview,
           },

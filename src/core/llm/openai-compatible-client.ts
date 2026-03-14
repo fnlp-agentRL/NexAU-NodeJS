@@ -68,7 +68,11 @@ function toOpenAIMessages(messages: ChatMessage[]): Array<Record<string, unknown
       };
     }
 
-    if (message.role === "assistant" && Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
+    if (
+      message.role === "assistant" &&
+      Array.isArray(message.tool_calls) &&
+      message.tool_calls.length > 0
+    ) {
       return {
         role: "assistant",
         content:

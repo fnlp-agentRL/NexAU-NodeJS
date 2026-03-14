@@ -65,11 +65,7 @@ function buildTraceback(error: unknown): string {
 }
 
 function hasSchemaCombinator(schema: Record<string, unknown>): boolean {
-  return (
-    Array.isArray(schema.anyOf) ||
-    Array.isArray(schema.oneOf) ||
-    Array.isArray(schema.allOf)
-  );
+  return Array.isArray(schema.anyOf) || Array.isArray(schema.oneOf) || Array.isArray(schema.allOf);
 }
 
 type CompiledValidator = ((data: unknown) => boolean) & { errors?: unknown[] | null };
