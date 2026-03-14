@@ -1,7 +1,7 @@
 {
   "prompt_toolcall": {
     "name": "prompt_toolcall",
-    "user_message": "请先查看当前目录与项目笔记，再保存一条记忆，最后给出简要结论。",
+    "user_message": "请先查看当前目录与项目笔记，再二次读取笔记片段，最后给出简要结论。",
     "responses": [
       {
         "content": "",
@@ -29,9 +29,11 @@
         "tool_calls": [
           {
             "id": "call_3",
-            "name": "save_memory",
+            "name": "read_file",
             "arguments": {
-              "fact": "project notes mention parity and stable tool-call schema"
+              "file_path": "compat/parity/cross-framework/files/project_notes.md",
+              "offset": 2,
+              "limit": 12
             }
           }
         ]
@@ -44,7 +46,7 @@
   },
   "prompt_toolcall_extended": {
     "name": "prompt_toolcall_extended",
-    "user_message": "先查看目录和项目笔记，再保存两条记忆，最后输出一段一句话总结。",
+    "user_message": "先查看目录和项目笔记，再执行两轮额外读取，最后输出一句话总结。",
     "responses": [
       {
         "content": "",
@@ -72,9 +74,11 @@
         "tool_calls": [
           {
             "id": "ext_call_3",
-            "name": "save_memory",
+            "name": "read_file",
             "arguments": {
-              "fact": "extended case: read context before writing memory"
+              "file_path": "compat/parity/cross-framework/files/project_notes.md",
+              "offset": 0,
+              "limit": 8
             }
           }
         ]
@@ -84,15 +88,88 @@
         "tool_calls": [
           {
             "id": "ext_call_4",
-            "name": "save_memory",
+            "name": "list_directory",
             "arguments": {
-              "fact": "extended case: multi-tool multi-round parity must be stable"
+              "dir_path": "compat/parity/cross-framework/files",
+              "show_hidden": true
             }
           }
         ]
       },
       {
         "content": "扩展场景执行完成，文件读取与双记忆写入均成功。",
+        "tool_calls": []
+      }
+    ]
+  },
+  "alias_toolcall": {
+    "name": "alias_toolcall",
+    "user_message": "请依次调用 Bash、Write、TodoWrite 三个工具，并在最后用一句话总结。",
+    "responses": [
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "alias_call_1",
+            "name": "Bash",
+            "arguments": {
+              "command": "echo alias-shell-ok"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "alias_call_2",
+            "name": "Write",
+            "arguments": {
+              "file_path": "/tmp/nexau_alias_note.md",
+              "content": "alias-write-ok"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "alias_call_3",
+            "name": "TodoWrite",
+            "arguments": {
+              "todos": [
+                {
+                  "description": "alias parity item",
+                  "status": "completed"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "content": "别名工具链执行完成。",
+        "tool_calls": []
+      }
+    ]
+  },
+  "error_toolcall": {
+    "name": "error_toolcall",
+    "user_message": "请调用 read_file，但不要传入 file_path，用于测试工具参数校验错误路径。",
+    "responses": [
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "err_call_1",
+            "name": "read_file",
+            "arguments": {}
+          }
+        ]
+      },
+      {
+        "content": "错误路径测试结束。",
         "tool_calls": []
       }
     ]
@@ -108,9 +185,14 @@
         "tool_calls": [
           {
             "id": "lc_call_1",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0001_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0001_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -120,9 +202,14 @@
         "tool_calls": [
           {
             "id": "lc_call_2",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0002_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0002_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -132,9 +219,14 @@
         "tool_calls": [
           {
             "id": "lc_call_3",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0003_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0003_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -144,9 +236,14 @@
         "tool_calls": [
           {
             "id": "lc_call_4",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0004_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0004_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -156,9 +253,14 @@
         "tool_calls": [
           {
             "id": "lc_call_5",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0005_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0005_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -168,9 +270,14 @@
         "tool_calls": [
           {
             "id": "lc_call_6",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0006_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0006_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -180,9 +287,14 @@
         "tool_calls": [
           {
             "id": "lc_call_7",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0007_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0007_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -192,9 +304,14 @@
         "tool_calls": [
           {
             "id": "lc_call_8",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0008_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0008_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -204,9 +321,14 @@
         "tool_calls": [
           {
             "id": "lc_call_9",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0009_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0009_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -216,9 +338,14 @@
         "tool_calls": [
           {
             "id": "lc_call_10",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0010_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0010_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -228,9 +355,14 @@
         "tool_calls": [
           {
             "id": "lc_call_11",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0011_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0011_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -240,9 +372,14 @@
         "tool_calls": [
           {
             "id": "lc_call_12",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0012_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0012_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -252,9 +389,14 @@
         "tool_calls": [
           {
             "id": "lc_call_13",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0013_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0013_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -264,9 +406,14 @@
         "tool_calls": [
           {
             "id": "lc_call_14",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0014_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0014_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -276,9 +423,14 @@
         "tool_calls": [
           {
             "id": "lc_call_15",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0015_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0015_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -288,9 +440,14 @@
         "tool_calls": [
           {
             "id": "lc_call_16",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0016_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0016_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -300,9 +457,14 @@
         "tool_calls": [
           {
             "id": "lc_call_17",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0017_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0017_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -312,9 +474,14 @@
         "tool_calls": [
           {
             "id": "lc_call_18",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0018_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0018_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -324,9 +491,14 @@
         "tool_calls": [
           {
             "id": "lc_call_19",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0019_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0019_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -336,9 +508,14 @@
         "tool_calls": [
           {
             "id": "lc_call_20",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0020_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0020_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -348,9 +525,14 @@
         "tool_calls": [
           {
             "id": "lc_call_21",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0021_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0021_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -360,9 +542,14 @@
         "tool_calls": [
           {
             "id": "lc_call_22",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0022_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0022_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -372,9 +559,14 @@
         "tool_calls": [
           {
             "id": "lc_call_23",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0023_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0023_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -384,9 +576,14 @@
         "tool_calls": [
           {
             "id": "lc_call_24",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0024_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0024_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -396,9 +593,14 @@
         "tool_calls": [
           {
             "id": "lc_call_25",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0025_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0025_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -408,9 +610,14 @@
         "tool_calls": [
           {
             "id": "lc_call_26",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0026_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0026_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -420,9 +627,14 @@
         "tool_calls": [
           {
             "id": "lc_call_27",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0027_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0027_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]
@@ -432,9 +644,14 @@
         "tool_calls": [
           {
             "id": "lc_call_28",
-            "name": "save_memory",
+            "name": "write_todos",
             "arguments": {
-              "fact": "long_context_fact_0028_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              "todos": [
+                {
+                  "description": "long_context_fact_0028_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "status": "in_progress"
+                }
+              ]
             }
           }
         ]

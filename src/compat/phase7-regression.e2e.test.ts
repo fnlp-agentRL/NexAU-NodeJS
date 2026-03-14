@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -19,6 +19,14 @@ interface FixtureFile {
 
 function readFixture(path: string): FixtureFile {
   return JSON.parse(readFileSync(path, "utf-8")) as FixtureFile;
+}
+
+function resolveFixtureSource(fixture: FixtureFile): string {
+  const localSourcePath = resolve(process.cwd(), fixture.meta.source_yaml);
+  if (existsSync(localSourcePath)) {
+    return localSourcePath;
+  }
+  return resolve(fixture.meta.baseline_repo, fixture.meta.source_yaml);
 }
 
 describe("Phase7 regression for core examples", () => {
@@ -47,7 +55,7 @@ describe("Phase7 regression for core examples", () => {
 
     const fixturePath = resolve(process.cwd(), "compat/parity/fixtures", fixtureFile);
     const fixture = readFixture(fixturePath);
-    const sourcePath = resolve(fixture.meta.baseline_repo, fixture.meta.source_yaml);
+    const sourcePath = resolveFixtureSource(fixture);
 
     const config = AgentConfig.fromYaml(sourcePath, {
       env: fixture.input.env,

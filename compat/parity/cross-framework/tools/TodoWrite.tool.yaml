@@ -1,0 +1,22 @@
+type: tool
+name: TodoWrite
+description: Update todo list for the current run.
+input_schema:
+  type: object
+  properties:
+    todos:
+      type: array
+      items:
+        type: object
+        properties:
+          description:
+            type: string
+          status:
+            type: string
+        required:
+          - description
+          - status
+        additionalProperties: false
+  required:
+    - todos
+  additionalProperties: false

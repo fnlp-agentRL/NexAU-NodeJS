@@ -1,0 +1,13 @@
+type: tool
+name: Bash
+description: Execute one shell command.
+input_schema:
+  type: object
+  properties:
+    command:
+      type: string
+    timeout:
+      type: number
+  required:
+    - command
+  additionalProperties: false

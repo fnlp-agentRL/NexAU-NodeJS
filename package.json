@@ -17,6 +17,13 @@
     "test:watch": "vitest",
     "parity:cross": "python3 compat/parity/cross-framework/run_compare.py",
     "parity:cross:check": "python3 compat/parity/cross-framework/run_compare.py --check --skip-if-baseline-missing",
+    "parity:assets": "node compat/parity/cross-framework/compare_assets.mjs",
+    "parity:assets:check": "node compat/parity/cross-framework/compare_assets.mjs --check --skip-if-baseline-missing",
+    "parity:all": "node compat/parity/cross-framework/run_parity_suite.mjs",
+    "parity:all:check": "node compat/parity/cross-framework/run_parity_suite.mjs --check --skip-if-baseline-missing",
+    "parity:all:failures": "node compat/parity/cross-framework/run_parity_suite.mjs --failures-only --check --skip-if-baseline-missing",
+    "parity:all:diagnose": "node compat/parity/cross-framework/diagnose_failures.mjs --skip-if-baseline-missing",
+    "parity:all:triage": "node compat/parity/cross-framework/diagnose_failures.mjs --skip-if-baseline-missing --compact",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test"
   },
   "dependencies": {

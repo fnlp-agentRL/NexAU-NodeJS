@@ -1,0 +1,22 @@
+type: tool
+name: write_todos
+description: Update todo list items in current run state.
+input_schema:
+  type: object
+  properties:
+    todos:
+      type: array
+      items:
+        type: object
+        properties:
+          description:
+            type: string
+          status:
+            type: string
+        required:
+          - description
+          - status
+        additionalProperties: false
+  required:
+    - todos
+  additionalProperties: false

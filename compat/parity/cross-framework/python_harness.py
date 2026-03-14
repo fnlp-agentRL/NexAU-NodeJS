@@ -85,6 +85,7 @@ class TimingMiddleware(Middleware):
                 "iteration": self._current_iteration,
                 "tool_name": str(hook_input.tool_name),
                 "tool_call_id": tool_call_id,
+                "arguments": normalize_value(hook_input.tool_input),
                 "ts_ms": ts_ms,
             }
         )
@@ -246,6 +247,7 @@ def group_tool_calls_by_iteration(middleware: TimingMiddleware) -> dict[str, lis
             {
                 "name": str(record.get("tool_name", "")),
                 "tool_call_id": str(record.get("tool_call_id", "")),
+                "arguments": normalize_value(record.get("arguments", {})),
             }
         )
     return grouped
@@ -257,7 +259,12 @@ def run_scenario(scenario_name: str) -> dict[str, Any]:
     if not isinstance(scenario, dict):
         raise RuntimeError(f"Unknown scenario: {scenario_name}")
 
-    config_name = "long_context_agent.yaml" if scenario_name == "long_context" else "prompt_parity_agent.yaml"
+    if scenario_name == "long_context":
+        config_name = "long_context_agent.yaml"
+    elif scenario_name == "alias_toolcall":
+        config_name = "alias_parity_agent.yaml"
+    else:
+        config_name = "prompt_parity_agent.yaml"
     config_path = THIS_DIR / "configs" / config_name
 
     config = AgentConfig.from_yaml(config_path=config_path)
@@ -329,7 +336,13 @@ def main() -> None:
     parser.add_argument(
         "--scenario",
         required=True,
-        choices=["prompt_toolcall", "prompt_toolcall_extended", "long_context"],
+        choices=[
+            "prompt_toolcall",
+            "prompt_toolcall_extended",
+            "alias_toolcall",
+            "error_toolcall",
+            "long_context",
+        ],
     )
     parser.add_argument("--output", default="")
     args = parser.parse_args()

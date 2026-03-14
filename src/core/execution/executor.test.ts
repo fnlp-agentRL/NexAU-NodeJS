@@ -190,6 +190,11 @@ describe("AgentExecutor", () => {
     expect(result.status).toBe("completed");
     expect(result.output).toBe("done after tool");
     expect(result.messages.some((message) => message.role === "tool")).toBe(true);
+    const toolCalled = result.events.find((event) => event.type === "tool.called");
+    expect(toolCalled?.payload.tool_name).toBe("write_todos");
+    expect(toolCalled?.payload.tool_arguments).toEqual({
+      todos: [{ description: "a", status: "in_progress" }],
+    });
     expect((agentState as { todos?: unknown[] }).todos?.length).toBe(1);
   });
 

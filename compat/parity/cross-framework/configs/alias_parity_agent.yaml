@@ -1,0 +1,26 @@
+name: alias_parity_agent
+type: agent
+system_prompt: |
+  You are running an alias-tool compatibility test.
+  Keep outputs concise and deterministic.
+tool_call_mode: openai
+max_context_tokens: 12000
+max_iterations: 8
+retry_attempts: 1
+timeout: 20
+llm_config:
+  model: mock-model
+  base_url: http://127.0.0.1:18080
+  api_key: mock-key
+  api_type: openai_chat_completion
+  stream: false
+tools:
+  - name: Bash
+    yaml_path: ../tools/Bash.tool.yaml
+    binding: nexau.archs.tool.builtin.shell_tools:run_shell_command
+  - name: Write
+    yaml_path: ../tools/Write.tool.yaml
+    binding: nexau.archs.tool.builtin.file_tools:write_file
+  - name: TodoWrite
+    yaml_path: ../tools/TodoWrite.tool.yaml
+    binding: nexau.archs.tool.builtin.session_tools:write_todos

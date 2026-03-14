@@ -6,12 +6,14 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  applyPatchTool,
   globTool,
   listDirectoryCompatTool,
   listDirectoryTool,
   readFileCompatTool,
   readManyFilesTool,
   readFileTool,
+  readVisualFileTool,
   replaceTool,
   searchFileContentTool,
   writeFileTool,
@@ -225,5 +227,84 @@ describe("builtin tools", () => {
       `{"success": true, "message": "Okay, I've remembered that: \\"Remember this\\""}`,
     );
     expect(memoryResult.returnDisplay).toBeUndefined();
+  });
+
+  it("supports apply_patch add/update/delete and move operations", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-apply-patch-"));
+    const sourcePath = join(dir, "sample.txt");
+    await writeFileTool({ file_path: sourcePath, content: "hello\nworld\n" });
+
+    const patch = [
+      "*** Begin Patch",
+      "*** Update File: sample.txt",
+      "@@",
+      " hello",
+      "-world",
+      "+node",
+      "*** Add File: added.txt",
+      "+new line",
+      "*** End Patch",
+    ].join("\n");
+    const result = await applyPatchTool({ input: patch, dir_path: dir });
+
+    expect(result.success).toBe(true);
+    expect(String(result.content)).toContain("M sample.txt");
+    expect(String(result.content)).toContain("A added.txt");
+    expect(readFileSync(sourcePath, "utf-8")).toBe("hello\nnode\n");
+    expect(readFileSync(join(dir, "added.txt"), "utf-8")).toBe("new line");
+
+    const movePatch = [
+      "*** Begin Patch",
+      "*** Update File: sample.txt",
+      "*** Move to: renamed.txt",
+      "@@",
+      " hello",
+      " node",
+      "*** End Patch",
+    ].join("\n");
+    await applyPatchTool({ input: movePatch, dir_path: dir });
+    expect(readFileSync(join(dir, "renamed.txt"), "utf-8")).toBe("hello\nnode\n");
+  });
+
+  it("reads image files via read_visual_file tool", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-read-visual-"));
+    const imagePath = join(dir, "pixel.png");
+    await writeFileTool({ file_path: imagePath, content: "not-a-real-png" });
+
+    const result = await readVisualFileTool({
+      file_path: imagePath,
+      image_detail: "high",
+    });
+
+    expect(result.media_type).toBe("image");
+    expect(Array.isArray(result.content)).toBe(true);
+    const blocks = result.content as Array<Record<string, unknown>>;
+    const imageUrl = blocks[0]?.image_url;
+    expect(typeof imageUrl).toBe("string");
+    expect(imageUrl).toContain("data:image/png;base64,");
+    expect(blocks[0]?.detail).toBe("high");
+  });
+
+  it("covers visual video branch and read_file visual guard", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-visual-video-"));
+    const videoPath = join(dir, "clip.mp4");
+    await writeFileTool({ file_path: videoPath, content: "fake-video" });
+
+    const visualResult = await readVisualFileTool({ file_path: videoPath });
+    expect(visualResult.media_type).toBe("video");
+    expect(visualResult.frame_support).toBe(false);
+
+    await expect(readFileTool({ file_path: videoPath })).rejects.toThrow("read_visual_file");
+  });
+
+  it("supports apply_patch delete operation", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-apply-patch-delete-"));
+    const targetPath = join(dir, "delete-me.txt");
+    await writeFileTool({ file_path: targetPath, content: "bye" });
+
+    const patch = ["*** Begin Patch", "*** Delete File: delete-me.txt", "*** End Patch"].join("\n");
+    const result = await applyPatchTool({ input: patch, dir_path: dir });
+    expect(String(result.content)).toContain("D delete-me.txt");
+    await expect(readFileTool({ file_path: targetPath })).rejects.toThrow();
   });
 });

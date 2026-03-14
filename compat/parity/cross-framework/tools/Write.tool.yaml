@@ -1,0 +1,14 @@
+type: tool
+name: Write
+description: Write content to a file.
+input_schema:
+  type: object
+  properties:
+    file_path:
+      type: string
+    content:
+      type: string
+  required:
+    - file_path
+    - content
+  additionalProperties: false

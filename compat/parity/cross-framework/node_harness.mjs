@@ -187,6 +187,7 @@ function groupToolCallsByIteration(events) {
     list.push({
       name: String(event.payload.tool_name ?? ""),
       tool_call_id: String(event.payload.tool_call_id ?? ""),
+      arguments: normalizeValue(event.payload.tool_arguments ?? {}),
     });
     result[iteration] = list;
   }
@@ -204,7 +205,9 @@ async function runScenario(args) {
   const configFile =
     args.scenario === "long_context"
       ? resolve(__dirname, "configs/long_context_agent.yaml")
-      : resolve(__dirname, "configs/prompt_parity_agent.yaml");
+      : args.scenario === "alias_toolcall"
+        ? resolve(__dirname, "configs/alias_parity_agent.yaml")
+        : resolve(__dirname, "configs/prompt_parity_agent.yaml");
 
   const llm = new ScriptedLLMClient(scenario.responses ?? []);
   const config = AgentConfig.fromYaml(configFile, { env: process.env });

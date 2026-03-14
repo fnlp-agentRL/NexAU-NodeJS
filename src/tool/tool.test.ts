@@ -187,6 +187,17 @@ describe("Tool", () => {
       resolveToolImplementation("nexau.archs.tool.builtin.file_tools:read_file", "ignored_name"),
     ).toBeTypeOf("function");
     expect(resolveToolImplementation(undefined, "write_todos")).toBeTypeOf("function");
+    expect(resolveToolImplementation(undefined, "Bash")).toBeTypeOf("function");
+    expect(resolveToolImplementation(undefined, "TodoWrite")).toBeTypeOf("function");
+    expect(resolveToolImplementation(undefined, "Write")).toBeTypeOf("function");
+    expect(resolveToolImplementation(undefined, "apply_patch")).toBeTypeOf("function");
+    expect(resolveToolImplementation(undefined, "read_visual_file")).toBeTypeOf("function");
+    expect(
+      resolveToolImplementation(
+        "nexau.archs.tool.builtin.file_tools:apply_patch",
+        "ignored_name_2",
+      ),
+    ).toBeTypeOf("function");
     expect(resolveToolImplementation(undefined, "not_exists")).toBeUndefined();
   });
 });

@@ -40,5 +40,5 @@ jobs:
       - name: Test
         run: pnpm test
 
-      - name: Cross-framework parity gate
-        run: pnpm parity:cross:check
+      - name: Cross-framework parity suite gate
+        run: pnpm parity:all:check

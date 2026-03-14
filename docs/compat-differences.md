@@ -15,8 +15,16 @@ This document tracks known behavior differences between:
 - Extensibility: middleware pipeline, tracer interface with Langfuse adapter, MCP tool discovery/call (HTTP + stdio).
 - Cross-framework scripted parity bench:
   - Prompt payload parity (multi-round + extended skill/tool chain): pass.
-  - Tool-call extraction parity (multi-round + extended skill/tool chain): pass.
+  - Tool-call extraction parity (name order + tool_call_id + arguments, including alias-tool scenario): pass.
+  - Error-path parity (tool param validation scenario): pass.
+  - Final output parity for scripted prompt scenarios: pass.
   - Long-context compaction parity (event count + final message count): pass.
+  - Example asset parity (`examples/` structured files `yaml/yml/json` semantic compare): pass.
+  - Unified parity suite report (`parity:all`) combines runtime parity + asset parity in one gate output, including runtime scenario table and asset diff-category summary.
+  - Failure-first suite mode (`parity:all:failures`) provides concise failed-scenario / key-diff highlights for CI triage.
+  - Diagnose mode (`parity:all:diagnose`) provides jq-friendly fragments (`failure_highlights`, runtime failed details, asset diff samples).
+  - Triage mode (`parity:all:triage`) provides one-command compact key fields without jq dependency.
+  - Long-context scenario uses side-effect-free tool calls to keep local repos unchanged during benchmarks.
 
 ## Cross-framework gate
 
@@ -27,6 +35,8 @@ python3 compat/parity/cross-framework/run_compare.py --check
 ```
 
 CI runs a safe gate wrapper (`pnpm parity:cross:check`) that skips only when baseline Python interpreter is unavailable.
+For static example assets, use `pnpm parity:assets:check` (safe skip if baseline root is unavailable).
+For combined gating and single report output, use `pnpm parity:all:check`.
 
 ## Phase 7 regression coverage
 
@@ -34,6 +44,8 @@ CI runs a safe gate wrapper (`pnpm parity:cross:check`) that skips only when bas
   - `examples/code_agent/code_agent.yaml`
   - `examples/deep_research/deep_research_agent.yaml`
   - `examples/nexau_building_team/leader_agent.yaml`
+- Standalone project packaging:
+  - `examples/` folder is now bundled in `NexAU-NodeJS`, so regression tests prefer local examples and only fallback to baseline paths when local files are missing.
 - Transport e2e coverage:
   - HTTP query/stream/health/info
   - STDIO query/stream

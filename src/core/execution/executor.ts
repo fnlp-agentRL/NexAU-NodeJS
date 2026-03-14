@@ -743,6 +743,7 @@ export class AgentExecutor {
             iteration,
             tool_name: toolCall.name,
             tool_call_id: toolCall.id,
+            tool_arguments: toolCall.arguments,
           },
         });
       }

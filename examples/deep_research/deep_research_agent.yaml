@@ -1,0 +1,43 @@
+type: agent
+name: deep_research_agent
+max_context_tokens: 1000000
+system_prompt: "Date: {{date}}. You are a deep research agent. You are given a message and you need to search for the information that matches the message. Use the web_search and web_read tools to get the information. Wait for the web_read tool to finish before you continue your response. Use RecallSubAgent to ask a new question to an old sub-agent."
+system_prompt_type: string
+tool_call_mode: openai
+llm_config:
+  temperature: 0.7
+  max_tokens: 4096
+  api_type: openai_chat_completion
+tools:
+  - name: web_search
+    yaml_path: ./tools/WebSearch.yaml
+    binding: nexau.archs.tool.builtin.web_tools:google_web_search
+    as_skill: true
+  - name: web_read
+    yaml_path: ./tools/WebRead.yaml
+    binding: nexau.archs.tool.builtin.web_tools:web_fetch
+    as_skill: true
+  - name: todo_write
+    yaml_path: ./tools/TodoWrite.tool.yaml
+    binding: nexau.archs.tool.builtin.session_tools:write_todos
+  - name: file_write
+    yaml_path: ./tools/Write.tool.yaml
+    binding: nexau.archs.tool.builtin.file_tools:write_file
+    as_skill: true
+skills:
+  - ./skills/algorithmic-art
+sub_agents:
+  - name: sub_deep_research_agent
+    config_path: subagent.yaml
+middlewares: # Middlewares are used to modify the behavior of the agent.
+  - import: nexau.archs.main_sub.execution.hooks:LoggingMiddleware
+    params:
+      model_logger: "nexau_deep_research_model_debug"
+      tool_logger: "nexau_deep_research_tool_debug"
+      log_model_calls: true
+tracers:
+  - import: nexau.archs.tracer.adapters.langfuse:LangfuseTracer
+    params:
+      public_key: ${env.LANGFUSE_PUBLIC_KEY}
+      secret_key: ${env.LANGFUSE_SECRET_KEY}
+      host: ${env.LANGFUSE_HOST}
