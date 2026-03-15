@@ -1,3 +1,7 @@
+import { existsSync } from "node:fs";
+import { isAbsolute, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+
 import type { AgentConfig } from "../agent-config.js";
 import type { ChatMessage, ExecutionEvent, ExecutionResult } from "./types.js";
 
@@ -31,6 +35,8 @@ export interface HookImportDefinition {
 
 export type HookDefinition = string | HookImportDefinition;
 
+const PASSTHROUGH_MIDDLEWARE: ExecutionMiddleware = async (context, next) => next(context);
+
 function toHookImport(definition: HookDefinition): HookImportDefinition {
   if (typeof definition === "string") {
     return {
@@ -46,6 +52,178 @@ function toHookImport(definition: HookDefinition): HookImportDefinition {
 
 function normalizeImportKey(raw: string): string {
   return raw.toLowerCase();
+}
+
+function parseImportSpecifier(raw: string): {
+  moduleSpecifier: string;
+  exportName?: string;
+} {
+  const normalized = raw.trim();
+  const colonIndex = normalized.lastIndexOf(":");
+  if (colonIndex <= 0) {
+    return { moduleSpecifier: normalized };
+  }
+
+  // Keep compatibility with Python-style `module.path:ExportName` while not
+  // breaking URL prefixes such as `file://`.
+  if (normalized.startsWith("file://") && colonIndex <= "file://".length) {
+    return { moduleSpecifier: normalized };
+  }
+
+  const exportName = normalized.slice(colonIndex + 1);
+  if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(exportName)) {
+    return { moduleSpecifier: normalized };
+  }
+
+  return {
+    moduleSpecifier: normalized.slice(0, colonIndex),
+    exportName,
+  };
+}
+
+function pushUnique(target: string[], value: string): void {
+  if (!target.includes(value)) {
+    target.push(value);
+  }
+}
+
+function buildImportCandidates(moduleSpecifier: string): string[] {
+  const candidates: string[] = [];
+
+  if (moduleSpecifier.startsWith("file://")) {
+    pushUnique(candidates, moduleSpecifier);
+    return candidates;
+  }
+
+  if (moduleSpecifier.startsWith(".") || moduleSpecifier.startsWith("/")) {
+    const absPath = isAbsolute(moduleSpecifier)
+      ? moduleSpecifier
+      : resolve(process.cwd(), moduleSpecifier);
+    if (existsSync(absPath)) {
+      pushUnique(candidates, pathToFileURL(absPath).href);
+    } else {
+      for (const ext of [".js", ".mjs", ".cjs", ".ts"]) {
+        const withExt = `${absPath}${ext}`;
+        if (existsSync(withExt)) {
+          pushUnique(candidates, pathToFileURL(withExt).href);
+        }
+      }
+    }
+    return candidates;
+  }
+
+  pushUnique(candidates, moduleSpecifier);
+
+  // Compatibility helper for Python-style dotted import paths.
+  if (moduleSpecifier.includes(".") && !moduleSpecifier.includes("/")) {
+    pushUnique(candidates, moduleSpecifier.replaceAll(".", "/"));
+  }
+
+  return candidates;
+}
+
+function isClassConstructor(candidate: unknown): candidate is new (...args: unknown[]) => unknown {
+  if (typeof candidate !== "function") {
+    return false;
+  }
+  const source = Function.prototype.toString.call(candidate);
+  return source.startsWith("class ");
+}
+
+function resolveMiddlewareFromObject(candidate: unknown): ExecutionMiddleware | null {
+  if (!candidate || typeof candidate !== "object") {
+    return null;
+  }
+
+  const maybeMiddleware = candidate as {
+    handle?: unknown;
+    middleware?: unknown;
+    execute?: unknown;
+  };
+
+  if (typeof maybeMiddleware.middleware === "function") {
+    return maybeMiddleware.middleware as ExecutionMiddleware;
+  }
+
+  if (typeof maybeMiddleware.handle === "function") {
+    return async (context, next) =>
+      (maybeMiddleware.handle as ExecutionMiddleware).call(candidate, context, next);
+  }
+
+  if (typeof maybeMiddleware.execute === "function") {
+    return async (context, next) =>
+      (maybeMiddleware.execute as ExecutionMiddleware).call(candidate, context, next);
+  }
+
+  return null;
+}
+
+function materializeMiddleware(
+  candidate: unknown,
+  params: Record<string, unknown>,
+): ExecutionMiddleware | null {
+  const fromObject = resolveMiddlewareFromObject(candidate);
+  if (fromObject) {
+    return fromObject;
+  }
+
+  if (typeof candidate !== "function") {
+    return null;
+  }
+
+  if (isClassConstructor(candidate)) {
+    try {
+      const instance = new candidate(params);
+      return materializeMiddleware(instance, params);
+    } catch {
+      return null;
+    }
+  }
+
+  // Two-arg function is treated as a middleware function directly.
+  if (candidate.length >= 2) {
+    return candidate as ExecutionMiddleware;
+  }
+
+  // One-arg/no-arg function is treated as a factory.
+  try {
+    const produced = (candidate as (params?: Record<string, unknown>) => unknown)(params);
+    if (produced === candidate) {
+      return null;
+    }
+    return materializeMiddleware(produced, params);
+  } catch {
+    return null;
+  }
+}
+
+async function loadExternalMiddleware(
+  hookImport: HookImportDefinition,
+): Promise<ExecutionMiddleware | null> {
+  const { moduleSpecifier, exportName } = parseImportSpecifier(hookImport.import);
+  const candidates = buildImportCandidates(moduleSpecifier);
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const loaded = (await import(candidate)) as Record<string, unknown>;
+      const exported = exportName
+        ? loaded[exportName]
+        : loaded.default !== undefined
+          ? loaded.default
+          : loaded;
+      const middleware = materializeMiddleware(exported, hookImport.params ?? {});
+      if (middleware) {
+        return middleware;
+      }
+    } catch {
+      // Continue to next candidate.
+    }
+  }
+
+  return null;
 }
 
 function getLogStateKey(params: Record<string, unknown>): string {
@@ -90,9 +268,9 @@ export function createLoggingMiddleware(params: Record<string, unknown> = {}): E
   };
 }
 
-export function resolveExecutionMiddlewares(
+export async function resolveExecutionMiddlewares(
   definitions: HookDefinition[] | undefined,
-): ExecutionMiddleware[] {
+): Promise<ExecutionMiddleware[]> {
   if (!definitions || definitions.length === 0) {
     return [];
   }
@@ -112,8 +290,14 @@ export function resolveExecutionMiddlewares(
       continue;
     }
 
+    const external = await loadExternalMiddleware(hookImport);
+    if (external) {
+      middlewares.push(external);
+      continue;
+    }
+
     // Unknown middleware is treated as pass-through so existing YAML configs remain runnable.
-    middlewares.push(async (context, next) => next(context));
+    middlewares.push(PASSTHROUGH_MIDDLEWARE);
   }
 
   return middlewares;

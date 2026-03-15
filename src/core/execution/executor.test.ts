@@ -389,6 +389,177 @@ describe("AgentExecutor", () => {
     expect(result.error).toContain("timed out");
   });
 
+  it("truncates oversized tool output when long_tool_output middleware is enabled", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-executor-long-output-"));
+    buildToolYaml(dir);
+    const configPath = buildAgentYaml(dir, {
+      extraLines: [
+        "middlewares:",
+        "  - import: nexau.archs.main_sub.execution.middleware.long_tool_output:LongToolOutputMiddleware",
+        "    params:",
+        "      max_output_chars: 200",
+        "      head_chars: 60",
+        "      tail_chars: 60",
+      ],
+    });
+    const config = AgentConfig.fromYaml(configPath);
+    (config as unknown as { retry_attempts: number }).retry_attempts = 0;
+
+    (config as { tools: Tool[] }).tools = [
+      new Tool({
+        name: "huge_tool",
+        description: "returns huge payload",
+        inputSchema: {
+          type: "object",
+          properties: {},
+          additionalProperties: false,
+        },
+        implementation: async () => ({
+          content: "A".repeat(1200),
+        }),
+      }),
+    ];
+
+    let step = 0;
+    const executor = new AgentExecutor({
+      createLLMClient: () => ({
+        async complete() {
+          if (step === 0) {
+            step += 1;
+            return {
+              content: "",
+              tool_calls: [{ id: "huge-1", name: "huge_tool", arguments: {} }],
+            };
+          }
+          return {
+            content: "done",
+          };
+        },
+      }),
+    });
+
+    const result = await executor.execute({
+      agent: config,
+      input: "run huge tool",
+    });
+
+    expect(result.status).toBe("completed");
+    const toolMessage = result.messages.find((message) => message.role === "tool");
+    expect(toolMessage).toBeTruthy();
+    expect(toolMessage?.content).toContain("[long_tool_output] truncated tool output");
+    const toolCompleted = result.events.find((event) => event.type === "tool.completed");
+    expect(toolCompleted?.payload.tool_output_truncated).toBe(true);
+  });
+
+  it("fails over to fallback llm provider when trigger condition matches", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-executor-failover-"));
+    buildToolYaml(dir);
+    const configPath = buildAgentYaml(dir, {
+      extraLines: [
+        "middlewares:",
+        "  - import: nexau.archs.main_sub.execution.middleware.llm_failover:LLMFailoverMiddleware",
+        "    params:",
+        "      trigger:",
+        "        status_codes: [500]",
+        "      fallback_providers:",
+        "        - name: backup",
+        "          llm_config:",
+        "            model: fallback-model",
+        "            base_url: https://example.com/v1",
+        "            api_key: test-key",
+      ],
+    });
+    const config = AgentConfig.fromYaml(configPath);
+    (config as unknown as { retry_attempts: number }).retry_attempts = 0;
+
+    let primaryCalls = 0;
+    let fallbackCalls = 0;
+    const executor = new AgentExecutor({
+      createLLMClient: (agent) => {
+        if (agent.llm_config.model === "fallback-model") {
+          return {
+            async complete() {
+              fallbackCalls += 1;
+              return {
+                content: "fallback response",
+              };
+            },
+          };
+        }
+
+        return {
+          async complete() {
+            primaryCalls += 1;
+            throw new Error("LLM request failed (500): upstream");
+          },
+        };
+      },
+    });
+
+    const result = await executor.execute({
+      agent: config,
+      input: "trigger failover",
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.output).toBe("fallback response");
+    expect(primaryCalls).toBe(1);
+    expect(fallbackCalls).toBe(1);
+    expect(result.events.some((event) => event.type === "llm.failover.triggered")).toBe(true);
+    expect(result.events.some((event) => event.type === "llm.failover.succeeded")).toBe(true);
+  });
+
+  it("does not trigger failover when status code is not configured", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-executor-failover-skip-"));
+    buildToolYaml(dir);
+    const configPath = buildAgentYaml(dir, {
+      extraLines: [
+        "middlewares:",
+        "  - import: nexau.archs.main_sub.execution.middleware.llm_failover:LLMFailoverMiddleware",
+        "    params:",
+        "      trigger:",
+        "        status_codes: [500]",
+        "      fallback_providers:",
+        "        - name: backup",
+        "          llm_config:",
+        "            model: fallback-model",
+        "            base_url: https://example.com/v1",
+        "            api_key: test-key",
+      ],
+    });
+    const config = AgentConfig.fromYaml(configPath);
+
+    let fallbackCalls = 0;
+    const executor = new AgentExecutor({
+      createLLMClient: (agent) => {
+        if (agent.llm_config.model === "fallback-model") {
+          return {
+            async complete() {
+              fallbackCalls += 1;
+              return {
+                content: "should not happen",
+              };
+            },
+          };
+        }
+        return {
+          async complete() {
+            throw new Error("LLM request failed (400): bad request");
+          },
+        };
+      },
+    });
+
+    const result = await executor.execute({
+      agent: config,
+      input: "no failover",
+    });
+
+    expect(result.status).toBe("failed");
+    expect(fallbackCalls).toBe(0);
+    expect(result.events.some((event) => event.type === "llm.failover.triggered")).toBe(false);
+  });
+
   it("wraps executor via Agent.run", async () => {
     const dir = mkdtempSync(join(tmpdir(), "nexau-agent-run-"));
     buildToolYaml(dir);
@@ -438,6 +609,139 @@ describe("AgentExecutor", () => {
     expect(result.status).toBe("completed");
     expect(Array.isArray(state.exec_logs)).toBe(true);
     expect((state.exec_logs as unknown[]).length).toBe(2);
+  });
+
+  it("selects a reduced tool subset when hybrid tool selector is configured", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-executor-tool-selector-"));
+    buildToolYaml(dir);
+    const configPath = buildAgentYaml(dir, {
+      extraLines: [
+        "middlewares:",
+        "  - import: nexau.archs.main_sub.execution.middleware.tool_selector:HybridSelector",
+        "    params:",
+        "      enabled: true",
+        "      top_k: 1",
+        "      per_domain_k: 1",
+        "      domains:",
+        "        docs: [document, doc]",
+        "        base: [record, table]",
+        "        messenger: [message, chat]",
+      ],
+    });
+    const config = AgentConfig.fromYaml(configPath);
+
+    (config as { tools: Tool[] }).tools = [
+      new Tool({
+        name: "docs.document.get",
+        description: "Read document content",
+        inputSchema: {
+          type: "object",
+          properties: {},
+          additionalProperties: false,
+        },
+        implementation: async () => ({ ok: true }),
+      }),
+      new Tool({
+        name: "base.record.create",
+        description: "Create base record",
+        inputSchema: {
+          type: "object",
+          properties: {},
+          additionalProperties: false,
+        },
+        implementation: async () => ({ ok: true }),
+      }),
+      new Tool({
+        name: "messenger.message.reply",
+        description: "Reply message",
+        inputSchema: {
+          type: "object",
+          properties: {},
+          additionalProperties: false,
+        },
+        implementation: async () => ({ ok: true }),
+      }),
+    ];
+
+    const requestedToolNames: string[][] = [];
+    const executor = new AgentExecutor({
+      createLLMClient: () => ({
+        async complete(input) {
+          const names = input.tools.map((tool) =>
+            String((tool.function as { name?: string } | undefined)?.name ?? ""),
+          );
+          requestedToolNames.push(names);
+          return {
+            content: "selector done",
+          };
+        },
+      }),
+    });
+
+    const result = await executor.execute({
+      agent: config,
+      input: "read this document",
+      agentState: {},
+    });
+
+    expect(result.status).toBe("completed");
+    expect(requestedToolNames.length).toBe(1);
+    expect(requestedToolNames[0]?.length).toBe(1);
+    expect(requestedToolNames[0]?.[0]).toBe("docs.document.get");
+    expect(result.events.some((event) => event.type === "tool.selection")).toBe(true);
+  });
+
+  it("falls back to full tools when selector import is unsupported", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-executor-tool-selector-fallback-"));
+    buildToolYaml(dir);
+    const configPath = buildAgentYaml(dir, {
+      extraLines: ["middlewares:", "  - import: custom.tool_selector:UnknownSelector"],
+    });
+    const config = AgentConfig.fromYaml(configPath);
+
+    (config as { tools: Tool[] }).tools = [
+      new Tool({
+        name: "docs.document.get",
+        description: "Read document content",
+        inputSchema: {
+          type: "object",
+          properties: {},
+          additionalProperties: false,
+        },
+        implementation: async () => ({ ok: true }),
+      }),
+      new Tool({
+        name: "base.record.create",
+        description: "Create base record",
+        inputSchema: {
+          type: "object",
+          properties: {},
+          additionalProperties: false,
+        },
+        implementation: async () => ({ ok: true }),
+      }),
+    ];
+
+    const executor = new AgentExecutor({
+      createLLMClient: () => ({
+        async complete(input) {
+          return {
+            content: String(input.tools.length),
+          };
+        },
+      }),
+    });
+
+    const result = await executor.execute({
+      agent: config,
+      input: "read document",
+      agentState: {},
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.output).toBe("2");
+    const selectorEvent = result.events.find((event) => event.type === "tool.selection");
+    expect(selectorEvent?.payload.selector_error).toContain("Unsupported tool selector import");
   });
 
   it("uses skill description for structured tools and context-compacts tool results", async () => {
@@ -654,6 +958,128 @@ describe("AgentExecutor", () => {
     expect(result.status).toBe("failed");
     expect(result.error).toBe("Execution interrupted");
     expect(result.messages.some((message) => message.role === "tool")).toBe(true);
+  });
+
+  it("interrupts while entering sequential tool execution loop", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-executor-interrupt-tools-"));
+    buildToolYaml(dir);
+    const configPath = buildAgentYaml(dir, {
+      maxIterations: 2,
+    });
+    const config = AgentConfig.fromYaml(configPath);
+
+    const toolA = new Tool({
+      name: "tool_a",
+      description: "tool a",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+      implementation: async () => ({ ok: "a" }),
+      disableParallel: true,
+    });
+    const toolB = new Tool({
+      name: "tool_b",
+      description: "tool b",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+      implementation: async () => ({ ok: "b" }),
+    });
+    (config as { tools: Tool[] }).tools = [toolA, toolB];
+
+    let step = 0;
+    const executor = new AgentExecutor({
+      createLLMClient: () => ({
+        async complete() {
+          if (step === 0) {
+            step += 1;
+            return {
+              content: "call serial tools",
+              tool_calls: [
+                { id: "a", name: "tool_a", arguments: {} },
+                { id: "b", name: "tool_b", arguments: {} },
+              ],
+            };
+          }
+          return {
+            content: "done",
+          };
+        },
+      }),
+    });
+
+    const controller = new AbortController();
+    const result = await executor.execute({
+      agent: config,
+      input: "interrupt on tool loop",
+      signal: controller.signal,
+      onEvent(event) {
+        if (event.type === "tool.called" && event.payload.tool_name === "tool_a") {
+          controller.abort();
+        }
+      },
+    });
+
+    expect(result.status).toBe("failed");
+    expect(result.error).toBe("Execution interrupted");
+    expect(result.events.some((event) => event.type === "run.failed")).toBe(true);
+  });
+
+  it("fails run when sequential tool execution throws a non-abort error", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-executor-tool-error-"));
+    buildToolYaml(dir);
+    const configPath = buildAgentYaml(dir, {
+      maxIterations: 2,
+    });
+    const config = AgentConfig.fromYaml(configPath);
+
+    const errorTool = new Tool({
+      name: "error_tool",
+      description: "throws",
+      inputSchema: {
+        type: "object",
+        properties: {},
+        additionalProperties: false,
+      },
+      implementation: async () => ({ ok: true }),
+    });
+    (
+      errorTool as unknown as {
+        execute: (params: Record<string, unknown>) => Promise<Record<string, unknown>>;
+      }
+    ).execute = async () => {
+      throw new Error("tool crashed");
+    };
+    (config as { tools: Tool[] }).tools = [errorTool];
+
+    let step = 0;
+    const executor = new AgentExecutor({
+      createLLMClient: () => ({
+        async complete() {
+          if (step === 0) {
+            step += 1;
+            return {
+              content: "",
+              tool_calls: [{ id: "err", name: "error_tool", arguments: {} }],
+            };
+          }
+          return {
+            content: "should not reach",
+          };
+        },
+      }),
+    });
+
+    const result = await executor.execute({
+      agent: config,
+      input: "trigger tool error",
+    });
+
+    expect(result.status).toBe("failed");
+    expect(result.error).toContain("tool crashed");
+    expect(result.events.some((event) => event.type === "run.failed")).toBe(true);
   });
 
   it("executes eligible tool calls in parallel", async () => {
