@@ -2,7 +2,7 @@
 
 This bench compares Python baseline (`/Users/yuning/Frontiers/NexAU-latest`) and Node rewrite (`/Users/yuning/Frontiers/NexAU-NodeJS`) on:
 
-1. Multi-round prompt assembly + tool-call extraction parity (including skill + multi-tool extended case).
+1. Multi-round prompt assembly + tool-call extraction parity (including skill + multi-tool extended case, `LoadSkill` tool-based skill detail case, and long-tool-output truncation case).
 2. Long-context multi-round automatic compaction parity (mock LLM, no real model inference).
 3. Alias tool parity (`Bash` / `Write` / `TodoWrite`) with strict name-order + arguments + final output checks.
 4. Error-path parity (`error_toolcall`) for tool parameter validation handling.
@@ -11,10 +11,11 @@ This bench compares Python baseline (`/Users/yuning/Frontiers/NexAU-latest`) and
 ## Data
 
 - `datasets/scenarios.json`: scripted model responses for prompt/extended/error/long-context scenarios.
-- Includes `alias_toolcall` and `error_toolcall` scenarios.
+- Includes `alias_toolcall`, `error_toolcall`, and `long_output_toolcall` scenarios.
 - `tools/*.tool.yaml`: shared tool schemas.
 - `skills/refactor-checklist/SKILL.md`: local skill fixture.
 - `files/project_notes.md`: local file fixture.
+- `files/long_output_notes.md`: deterministic long-content fixture for truncation parity.
 
 ## Harness
 

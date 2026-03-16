@@ -261,6 +261,8 @@ def run_scenario(scenario_name: str) -> dict[str, Any]:
 
     if scenario_name == "long_context":
         config_name = "long_context_agent.yaml"
+    elif scenario_name == "long_output_toolcall":
+        config_name = "long_output_agent.yaml"
     elif scenario_name == "alias_toolcall":
         config_name = "alias_parity_agent.yaml"
     else:
@@ -268,6 +270,7 @@ def run_scenario(scenario_name: str) -> dict[str, Any]:
     config_path = THIS_DIR / "configs" / config_name
 
     config = AgentConfig.from_yaml(config_path=config_path)
+    existing_middlewares = list(config.middlewares or [])
 
     timing_middleware = TimingMiddleware()
     context_middleware: ContextCompactionMiddleware | None = None
@@ -286,7 +289,7 @@ def run_scenario(scenario_name: str) -> dict[str, Any]:
         config.max_iterations = int(scenario.get("max_iterations", 28))
         config.middlewares = [context_middleware, timing_middleware]
     else:
-        config.middlewares = [timing_middleware]
+        config.middlewares = [*existing_middlewares, timing_middleware]
 
     client = ScriptedOpenAIClient(list(scenario.get("responses", [])))
     agent = Agent(config=config, user_id="parity_user", session_id=f"parity_{scenario_name}")
@@ -339,6 +342,8 @@ def main() -> None:
         choices=[
             "prompt_toolcall",
             "prompt_toolcall_extended",
+            "load_skill_toolcall",
+            "long_output_toolcall",
             "alias_toolcall",
             "error_toolcall",
             "long_context",

@@ -5,6 +5,7 @@ import { initializeMcpTools } from "../tool/builtin/mcp-client.js";
 
 interface AgentRunOptions {
   history?: ExecuteOptions["history"];
+  systemPromptAddition?: ExecuteOptions["systemPromptAddition"];
   agentState?: ExecuteOptions["agentState"];
   signal?: ExecuteOptions["signal"];
   traceContext?: ExecuteOptions["traceContext"];
@@ -64,6 +65,7 @@ export class Agent {
       agent: this.config,
       input,
       history: options.history,
+      systemPromptAddition: options.systemPromptAddition,
       agentState: options.agentState,
       signal: options.signal,
       traceContext: options.traceContext,

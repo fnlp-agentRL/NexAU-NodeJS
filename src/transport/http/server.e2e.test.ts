@@ -66,9 +66,12 @@ describe("HTTP transport", () => {
     const config = AgentConfig.fromYaml(configPath);
 
     let calls = 0;
+    let capturedSystemPrompt = "";
     const agent = new Agent(config, {
       createLLMClient: () => ({
-        async complete() {
+        async complete(input) {
+          const systemMessage = input.messages.find((message) => message.role === "system");
+          capturedSystemPrompt = systemMessage?.content ?? "";
           if (calls === 0) {
             calls += 1;
             return {
@@ -114,11 +117,15 @@ describe("HTTP transport", () => {
     const query = await fetch(`${base}/query`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ input: "hello" }),
+      body: JSON.stringify({
+        input: "hello",
+        system_prompt_addition: "http dynamic prompt",
+      }),
     });
     expect(query.status).toBe(200);
     const queryJson = (await query.json()) as Record<string, unknown>;
     expect(queryJson.output).toBe("final output");
+    expect(capturedSystemPrompt).toContain("http dynamic prompt");
 
     calls = 0;
     const stream = await fetch(`${base}/stream`, {

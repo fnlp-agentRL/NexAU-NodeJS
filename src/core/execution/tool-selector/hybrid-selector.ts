@@ -20,7 +20,14 @@ interface ScoredTool {
   lexicalScore: number;
   paramScore: number;
   sessionScore: number;
+  domainSignalScore: number;
   score: number;
+}
+
+interface LinkSignals {
+  links: string[];
+  domainBoosts: Map<string, number>;
+  signalTokens: Set<string>;
 }
 
 const WRITE_ACTION_HINTS = [
@@ -44,6 +51,30 @@ const DEFAULT_DOMAIN_HINTS: Record<string, string[]> = {
   tasks: ["tasks", "task", "todo", "subtask", "任务", "待办"],
   messenger: ["messenger", "message", "chat", "reply", "消息", "聊天", "回复"],
 };
+
+const URL_PATTERN =
+  /(https?:\/\/[^\s<>"'`]+|(?:[a-z0-9-]+\.)?(?:feishu\.cn|larksuite\.com)\/[^\s<>"'`]+)/giu;
+const TRAILING_URL_PUNCTUATION = /[),.;!?]+$/u;
+const PARAM_HINT_KEYS = [
+  "app_token",
+  "table_id",
+  "record_id",
+  "field_id",
+  "view_id",
+  "document_id",
+  "block_id",
+  "message_id",
+  "reaction_id",
+  "file_key",
+  "spreadsheet_token",
+  "sheet_id",
+  "calendar_id",
+  "event_id",
+  "task_guid",
+  "task_id",
+  "tasklist_guid",
+  "comment_id",
+];
 
 function tokenize(text: string): string[] {
   const matches = text.toLowerCase().match(/[\p{L}\p{N}_-]+/gu);
@@ -78,6 +109,92 @@ function normalizeBool(value: unknown, fallback: boolean): boolean {
     return value;
   }
   return fallback;
+}
+
+function normalizeUrlCandidate(raw: string): string {
+  return raw.trim().replace(TRAILING_URL_PUNCTUATION, "");
+}
+
+function bumpDomainScore(target: Map<string, number>, domain: string, score: number): void {
+  target.set(domain, (target.get(domain) ?? 0) + score);
+}
+
+function extractLinkSignals(text: string): LinkSignals {
+  const links: string[] = [];
+  const domainBoosts = new Map<string, number>();
+  const signalTokens = new Set<string>();
+
+  for (const key of PARAM_HINT_KEYS) {
+    if (text.toLowerCase().includes(key)) {
+      signalTokens.add(key);
+    }
+  }
+
+  for (const match of text.matchAll(URL_PATTERN)) {
+    const raw = normalizeUrlCandidate(match[1] ?? "");
+    if (raw.length === 0) {
+      continue;
+    }
+
+    const withScheme =
+      raw.startsWith("http://") || raw.startsWith("https://") ? raw : `https://${raw}`;
+    let parsed: URL;
+    try {
+      parsed = new URL(withScheme);
+    } catch {
+      continue;
+    }
+
+    const host = parsed.host.toLowerCase();
+    if (!host.includes("feishu.cn") && !host.includes("larksuite.com")) {
+      continue;
+    }
+
+    links.push(parsed.toString());
+    const pathname = parsed.pathname.toLowerCase();
+
+    if (pathname.includes("/base/") || pathname.includes("/bitable/")) {
+      bumpDomainScore(domainBoosts, "base", 8);
+      signalTokens.add("app_token");
+    }
+    if (pathname.includes("/docx/") || pathname.includes("/docs/") || pathname.includes("/wiki/")) {
+      bumpDomainScore(domainBoosts, "docs", 8);
+      signalTokens.add("document_id");
+    }
+    if (pathname.includes("/sheets/") || pathname.includes("/sheet/")) {
+      bumpDomainScore(domainBoosts, "sheets", 8);
+      signalTokens.add("spreadsheet_token");
+      signalTokens.add("sheet_id");
+    }
+    if (pathname.includes("/calendar/")) {
+      bumpDomainScore(domainBoosts, "calendar", 8);
+      signalTokens.add("calendar_id");
+      signalTokens.add("event_id");
+    }
+    if (pathname.includes("/task/") || pathname.includes("/todo/")) {
+      bumpDomainScore(domainBoosts, "tasks", 8);
+      signalTokens.add("task_guid");
+      signalTokens.add("task_id");
+      signalTokens.add("tasklist_guid");
+    }
+    if (pathname.includes("/message/") || pathname.includes("/im/")) {
+      bumpDomainScore(domainBoosts, "messenger", 6);
+      signalTokens.add("message_id");
+    }
+
+    for (const [key] of parsed.searchParams.entries()) {
+      const normalized = key.trim().toLowerCase();
+      if (PARAM_HINT_KEYS.includes(normalized)) {
+        signalTokens.add(normalized);
+      }
+    }
+  }
+
+  return {
+    links,
+    domainBoosts,
+    signalTokens,
+  };
 }
 
 function toolDomain(tool: Tool): string {
@@ -232,25 +349,31 @@ export class HybridToolSelector implements ToolSelector {
     const queryText = [input.query, ...input.messages.slice(-4).map((item) => item.content)].join(
       "\n",
     );
+    const queryTextLower = queryText.toLowerCase();
     const queryTokensList = tokenize(queryText);
     const queryTokens = new Set(queryTokensList);
     const domainKeywords = normalizeDomainKeywords(input.tools, this.domainHintsRaw);
+    const linkSignals = extractLinkSignals(queryText);
 
     const domainScores: Array<{ domain: string; score: number }> = [];
     for (const [domain, keywords] of domainKeywords.entries()) {
       let score = 0;
       for (const keyword of keywords) {
-        if (queryText.toLowerCase().includes(keyword)) {
+        if (queryTextLower.includes(keyword)) {
           score += 2;
         }
         if (queryTokens.has(keyword)) {
           score += 3;
         }
       }
+      score += linkSignals.domainBoosts.get(domain) ?? 0;
       domainScores.push({ domain, score });
     }
 
     domainScores.sort((a, b) => b.score - a.score || a.domain.localeCompare(b.domain));
+    const domainRank = new Map<string, number>(
+      domainScores.map((item, index) => [item.domain, index] as const),
+    );
 
     const routedDomains =
       domainScores
@@ -302,7 +425,12 @@ export class HybridToolSelector implements ToolSelector {
         paramScore += 0.2;
       } else {
         for (const field of required) {
-          paramScore += matchesRequiredField(queryTokens, field) ? 0.6 : -0.2;
+          const fieldLower = field.toLowerCase();
+          const hasFieldSignal =
+            matchesRequiredField(queryTokens, field) ||
+            queryTextLower.includes(fieldLower) ||
+            linkSignals.signalTokens.has(fieldLower);
+          paramScore += hasFieldSignal ? 0.6 : -0.2;
         }
       }
 
@@ -314,13 +442,23 @@ export class HybridToolSelector implements ToolSelector {
         sessionScore += 0.4;
       }
 
-      const score = lexicalScore + paramScore + sessionScore;
+      let domainSignalScore = 0;
+      const rank = domainRank.get(domain);
+      if (rank !== undefined && rank < 3) {
+        domainSignalScore += 0.6 - rank * 0.2;
+      }
+      if ((linkSignals.domainBoosts.get(domain) ?? 0) > 0) {
+        domainSignalScore += 1.2;
+      }
+
+      const score = lexicalScore + paramScore + sessionScore + domainSignalScore;
       scored.push({
         tool,
         domain,
         lexicalScore,
         paramScore,
         sessionScore,
+        domainSignalScore,
         score,
       });
     }
@@ -412,6 +550,10 @@ export class HybridToolSelector implements ToolSelector {
         per_domain_k: this.perDomainK,
         readonly_mode: this.readonlyMode,
         fallback_to_all: fallbackToAll,
+        detected_link_count: linkSignals.links.length,
+        link_signal_domains: [...linkSignals.domainBoosts.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([domain]) => domain),
         top_candidates: filtered.slice(0, 5).map((item) => ({
           tool: item.tool.name,
           domain: item.domain,
@@ -419,6 +561,7 @@ export class HybridToolSelector implements ToolSelector {
           lexical_score: Number(item.lexicalScore.toFixed(3)),
           param_score: Number(item.paramScore.toFixed(3)),
           session_score: Number(item.sessionScore.toFixed(3)),
+          domain_signal_score: Number(item.domainSignalScore.toFixed(3)),
         })),
       },
     };

@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -150,6 +150,38 @@ describe("AgentExecutor", () => {
     expect(result.status).toBe("completed");
     expect(result.output).toBe("final answer");
     expect(result.iterations).toBe(1);
+  });
+
+  it("appends dynamic system prompt addition to system message", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-executor-dynamic-system-"));
+    buildToolYaml(dir);
+    const configPath = buildAgentYaml(dir, {
+      extraLines: ["system_prompt: |", "  Base instruction"],
+    });
+
+    const config = AgentConfig.fromYaml(configPath);
+    const scripted = new ScriptedLLMClient([
+      {
+        content: "ok",
+      },
+    ]);
+
+    const executor = new AgentExecutor({
+      createLLMClient: () => scripted,
+    });
+
+    await executor.execute({
+      agent: config,
+      input: "hello",
+      systemPromptAddition: "Dynamic instruction",
+    });
+
+    const firstCall = scripted.calls[0];
+    expect(firstCall).toBeTruthy();
+    const systemMessage = firstCall?.messages.find((message) => message.role === "system");
+    expect(systemMessage).toBeTruthy();
+    expect(systemMessage?.content).toContain("Base instruction");
+    expect(systemMessage?.content).toContain("Dynamic instruction");
   });
 
   it("emits prompt/tool token estimates in llm.requested", async () => {
@@ -391,6 +423,7 @@ describe("AgentExecutor", () => {
 
   it("truncates oversized tool output when long_tool_output middleware is enabled", async () => {
     const dir = mkdtempSync(join(tmpdir(), "nexau-executor-long-output-"));
+    const outputDir = mkdtempSync(join(tmpdir(), "nexau-executor-long-output-files-"));
     buildToolYaml(dir);
     const configPath = buildAgentYaml(dir, {
       extraLines: [
@@ -400,6 +433,7 @@ describe("AgentExecutor", () => {
         "      max_output_chars: 200",
         "      head_chars: 60",
         "      tail_chars: 60",
+        `      temp_dir: ${outputDir}`,
       ],
     });
     const config = AgentConfig.fromYaml(configPath);
@@ -446,9 +480,233 @@ describe("AgentExecutor", () => {
     expect(result.status).toBe("completed");
     const toolMessage = result.messages.find((message) => message.role === "tool");
     expect(toolMessage).toBeTruthy();
-    expect(toolMessage?.content).toContain("[long_tool_output] truncated tool output");
+    const parsedToolMessage = JSON.parse(String(toolMessage?.content ?? "{}")) as {
+      content?: string;
+    };
+    expect(typeof parsedToolMessage.content).toBe("string");
+    expect(parsedToolMessage.content).toContain("[LongToolOutputMiddleware] The full output");
+    expect(parsedToolMessage.content).toContain("[");
     const toolCompleted = result.events.find((event) => event.type === "tool.completed");
     expect(toolCompleted?.payload.tool_output_truncated).toBe(true);
+    expect(typeof toolCompleted?.payload.tool_output_saved_path).toBe("string");
+    const savedPath = String(toolCompleted?.payload.tool_output_saved_path ?? "");
+    expect(readFileSync(savedPath, "utf-8")).toContain("A".repeat(800));
+  });
+
+  it("ignores returnDisplay when evaluating long_tool_output truncation threshold", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-executor-long-output-return-display-"));
+    buildToolYaml(dir);
+    const configPath = buildAgentYaml(dir, {
+      extraLines: [
+        "middlewares:",
+        "  - import: nexau.archs.main_sub.execution.middleware.long_tool_output:LongToolOutputMiddleware",
+        "    params:",
+        "      max_output_chars: 180",
+        "      head_chars: 60",
+        "      tail_chars: 60",
+      ],
+    });
+    const config = AgentConfig.fromYaml(configPath);
+    (config as unknown as { retry_attempts: number }).retry_attempts = 0;
+
+    (config as { tools: Tool[] }).tools = [
+      new Tool({
+        name: "display_tool",
+        description: "returns short content and huge returnDisplay",
+        inputSchema: {
+          type: "object",
+          properties: {},
+          additionalProperties: false,
+        },
+        implementation: async () => ({
+          content: "short content",
+          returnDisplay: "B".repeat(4000),
+        }),
+      }),
+    ];
+
+    let step = 0;
+    const executor = new AgentExecutor({
+      createLLMClient: () => ({
+        async complete() {
+          if (step === 0) {
+            step += 1;
+            return {
+              content: "",
+              tool_calls: [{ id: "display-1", name: "display_tool", arguments: {} }],
+            };
+          }
+          return {
+            content: "done",
+          };
+        },
+      }),
+    });
+
+    const result = await executor.execute({
+      agent: config,
+      input: "run display tool",
+    });
+
+    expect(result.status).toBe("completed");
+    const toolMessage = result.messages.find((message) => message.role === "tool");
+    expect(toolMessage).toBeTruthy();
+    const parsedToolMessage = JSON.parse(String(toolMessage?.content ?? "{}")) as {
+      content?: string;
+      returnDisplay?: string;
+    };
+    expect(parsedToolMessage.content).toBe("short content");
+    expect(parsedToolMessage.returnDisplay).toBeUndefined();
+    const toolCompleted = result.events.find((event) => event.type === "tool.completed");
+    expect(toolCompleted?.payload.tool_output_truncated).not.toBe(true);
+    expect(toolCompleted?.payload.tool_output_saved_path).toBeUndefined();
+  });
+
+  it("throws on invalid long_tool_output character window config", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-executor-long-output-invalid-window-"));
+    buildToolYaml(dir);
+    const configPath = buildAgentYaml(dir, {
+      extraLines: [
+        "middlewares:",
+        "  - import: nexau.archs.main_sub.execution.middleware.long_tool_output:LongToolOutputMiddleware",
+        "    params:",
+        "      max_output_chars: 100",
+        "      head_chars: 60",
+        "      tail_chars: 50",
+      ],
+    });
+    const config = AgentConfig.fromYaml(configPath);
+
+    const executor = new AgentExecutor({
+      createLLMClient: () => ({
+        async complete() {
+          return { content: "ok" };
+        },
+      }),
+    });
+
+    await expect(
+      executor.execute({
+        agent: config,
+        input: "invalid config",
+      }),
+    ).rejects.toThrow("head_chars + tail_chars must be <= max_output_chars");
+  });
+
+  it("throws on invalid long_tool_output bypass_tool_names type", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-executor-long-output-invalid-bypass-"));
+    buildToolYaml(dir);
+    const configPath = buildAgentYaml(dir, {
+      extraLines: [
+        "middlewares:",
+        "  - import: nexau.archs.main_sub.execution.middleware.long_tool_output:LongToolOutputMiddleware",
+        "    params:",
+        "      bypass_tool_names: write_todos",
+      ],
+    });
+    const config = AgentConfig.fromYaml(configPath);
+
+    const executor = new AgentExecutor({
+      createLLMClient: () => ({
+        async complete() {
+          return { content: "ok" };
+        },
+      }),
+    });
+
+    await expect(
+      executor.execute({
+        agent: config,
+        input: "invalid bypass config",
+      }),
+    ).rejects.toThrow("bypass_tool_names must be an array of strings");
+  });
+
+  it("throws on invalid long_tool_output max_output_chars value", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-executor-long-output-invalid-max-"));
+    buildToolYaml(dir);
+    const configPath = buildAgentYaml(dir, {
+      extraLines: [
+        "middlewares:",
+        "  - import: nexau.archs.main_sub.execution.middleware.long_tool_output:LongToolOutputMiddleware",
+        "    params:",
+        "      max_output_chars: 0",
+      ],
+    });
+    const config = AgentConfig.fromYaml(configPath);
+
+    const executor = new AgentExecutor({
+      createLLMClient: () => ({
+        async complete() {
+          return { content: "ok" };
+        },
+      }),
+    });
+
+    await expect(
+      executor.execute({
+        agent: config,
+        input: "invalid max chars",
+      }),
+    ).rejects.toThrow("max_output_chars must be >= 1");
+  });
+
+  it("throws on invalid long_tool_output temp_dir type", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-executor-long-output-invalid-temp-dir-"));
+    buildToolYaml(dir);
+    const configPath = buildAgentYaml(dir, {
+      extraLines: [
+        "middlewares:",
+        "  - import: nexau.archs.main_sub.execution.middleware.long_tool_output:LongToolOutputMiddleware",
+        "    params:",
+        "      temp_dir: 123",
+      ],
+    });
+    const config = AgentConfig.fromYaml(configPath);
+
+    const executor = new AgentExecutor({
+      createLLMClient: () => ({
+        async complete() {
+          return { content: "ok" };
+        },
+      }),
+    });
+
+    await expect(
+      executor.execute({
+        agent: config,
+        input: "invalid temp dir",
+      }),
+    ).rejects.toThrow("temp_dir must be a string or null");
+  });
+
+  it("throws when long_tool_output bypass_tool_names has empty item", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-executor-long-output-invalid-bypass-item-"));
+    buildToolYaml(dir);
+    const configPath = buildAgentYaml(dir, {
+      extraLines: [
+        "middlewares:",
+        "  - import: nexau.archs.main_sub.execution.middleware.long_tool_output:LongToolOutputMiddleware",
+        "    params:",
+        "      bypass_tool_names: ['']",
+      ],
+    });
+    const config = AgentConfig.fromYaml(configPath);
+
+    const executor = new AgentExecutor({
+      createLLMClient: () => ({
+        async complete() {
+          return { content: "ok" };
+        },
+      }),
+    });
+
+    await expect(
+      executor.execute({
+        agent: config,
+        input: "invalid bypass item",
+      }),
+    ).rejects.toThrow("bypass_tool_names must contain non-empty strings");
   });
 
   it("fails over to fallback llm provider when trigger condition matches", async () => {

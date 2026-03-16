@@ -18,6 +18,8 @@ NODE_BIN = "node"
 DEFAULT_PROMPT_SCENARIOS = [
     "prompt_toolcall",
     "prompt_toolcall_extended",
+    "load_skill_toolcall",
+    "long_output_toolcall",
     "alias_toolcall",
     "error_toolcall",
 ]

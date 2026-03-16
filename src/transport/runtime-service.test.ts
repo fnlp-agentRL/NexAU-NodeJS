@@ -34,6 +34,33 @@ function createConfig(
 }
 
 describe("RuntimeService sessions", () => {
+  it("passes system_prompt_addition through to agent execution", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-runtime-dynamic-system-"));
+    const configPath = createConfig(dir, "runtime_dynamic_prompt");
+    const config = AgentConfig.fromYaml(configPath);
+
+    let capturedSystemPrompt = "";
+    const agent = new Agent(config, {
+      createLLMClient: () => ({
+        async complete(input) {
+          const systemMessage = input.messages.find((message) => message.role === "system");
+          capturedSystemPrompt = systemMessage?.content ?? "";
+          return {
+            content: "ok",
+          };
+        },
+      }),
+    });
+
+    const runtime = new RuntimeService(agent);
+    await runtime.query({
+      input: "hello",
+      system_prompt_addition: "Dynamic control rules",
+    });
+
+    expect(capturedSystemPrompt).toContain("Dynamic control rules");
+  });
+
   it("restores session history across service instances", async () => {
     const dir = mkdtempSync(join(tmpdir(), "nexau-runtime-session-"));
     const configPath = createConfig(dir);

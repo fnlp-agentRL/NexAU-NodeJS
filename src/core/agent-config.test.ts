@@ -245,6 +245,56 @@ describe("AgentConfig.fromYaml", () => {
     expect(loadSkill?.description).toContain("save_memory");
   });
 
+  it("returns detailed guidance for tool-based skills via LoadSkill", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-agent-config-tool-skill-detail-"));
+    const toolPath = join(dir, "save_memory.tool.yaml");
+    const configPath = join(dir, "agent.yaml");
+
+    writeFileSync(
+      toolPath,
+      [
+        "type: tool",
+        "name: save_memory",
+        "description: Save memory fact.",
+        "skill_description: Store one durable user/project fact for later rounds.",
+        "input_schema:",
+        "  type: object",
+        "  properties:",
+        "    fact:",
+        "      type: string",
+        "      description: Memory sentence.",
+        "  required:",
+        "    - fact",
+        "  additionalProperties: false",
+      ].join("\n"),
+    );
+    writeFileSync(
+      configPath,
+      [
+        "type: agent",
+        "name: skill_tool_agent",
+        "tool_call_mode: openai",
+        "tools:",
+        "  - name: save_memory",
+        "    yaml_path: ./save_memory.tool.yaml",
+        "    binding: nexau.archs.tool.builtin.session_tools:save_memory",
+        "    as_skill: true",
+        "llm_config:",
+        "  api_type: openai_chat_completion",
+      ].join("\n"),
+    );
+
+    const config = AgentConfig.fromYaml(configPath, { env: TEST_ENV });
+    const loadSkill = config.tools.find((tool) => tool.name === "LoadSkill");
+    expect(loadSkill).toBeTruthy();
+
+    const result = await loadSkill!.execute({ skill_name: "save_memory" });
+    expect(typeof result.result).toBe("string");
+    expect(String(result.result)).toContain("<SkillName>save_memory</SkillName>");
+    expect(String(result.result)).toContain("## Detailed Description");
+    expect(String(result.result)).toContain("Save memory fact.");
+  });
+
   it("preserves configured skill folder expression in LoadSkill description", () => {
     const root = mkdtempSync(join(tmpdir(), "nexau-agent-config-skill-path-"));
     const configDir = join(root, "configs");

@@ -55,9 +55,14 @@ describe("STDIO transport", () => {
     const config = AgentConfig.fromYaml(configPath);
 
     let calls = 0;
+    let sawDynamicPrompt = false;
     const agent = new Agent(config, {
       createLLMClient: () => ({
-        async complete() {
+        async complete(input) {
+          const systemMessage = input.messages.find((message) => message.role === "system");
+          if ((systemMessage?.content ?? "").includes("stdio dynamic prompt")) {
+            sawDynamicPrompt = true;
+          }
           if (calls === 0) {
             calls += 1;
             return {
@@ -90,7 +95,10 @@ describe("STDIO transport", () => {
       {
         id: "q",
         method: "query",
-        params: { input: "hello" },
+        params: {
+          input: "hello",
+          system_prompt_addition: "stdio dynamic prompt",
+        },
       },
       (payload) => outputs.push(payload),
     );
@@ -113,6 +121,7 @@ describe("STDIO transport", () => {
       result: { output: string };
     };
     expect(queryResult.result.output).toBe("stdio done");
+    expect(sawDynamicPrompt).toBe(true);
 
     const streamEvents = outputs.filter((item) => item.id === "s" && item.type === "event");
     expect(streamEvents.length).toBeGreaterThan(0);

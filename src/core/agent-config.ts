@@ -206,7 +206,75 @@ function generateSkillToolDescription(skills: SkillDefinition[], tools: Tool[]):
   return description;
 }
 
-function buildLoadSkillTool(tools: Tool[], skills: SkillDefinition[]): Tool | null {
+function buildXmlParameterLines(tool: Tool): string[] {
+  const schema = tool.inputSchema;
+  const properties =
+    typeof schema.properties === "object" && schema.properties
+      ? (schema.properties as Record<string, unknown>)
+      : {};
+  const required = new Set(
+    Array.isArray(schema.required)
+      ? schema.required.filter((item): item is string => typeof item === "string")
+      : [],
+  );
+
+  const lines: string[] = [];
+  for (const [paramName, rawInfo] of Object.entries(properties)) {
+    const info =
+      typeof rawInfo === "object" && rawInfo !== null ? (rawInfo as Record<string, unknown>) : {};
+    const description =
+      typeof info.description === "string" && info.description.trim().length > 0
+        ? info.description.trim()
+        : "Parameter value";
+    const paramType =
+      typeof info.type === "string" && info.type.trim().length > 0 ? info.type.trim() : "string";
+    const requiredLabel = required.has(paramName) ? "required" : "optional";
+    const defaultValue = "default" in info ? info.default : undefined;
+    const defaultText =
+      defaultValue !== null && defaultValue !== undefined
+        ? `, default: ${String(defaultValue)}`
+        : "";
+
+    lines.push(
+      `    <${paramName}>${description} (${requiredLabel}, type: ${paramType}${defaultText})</${paramName}>`,
+    );
+  }
+  return lines;
+}
+
+function buildToolSkillDetail(tool: Tool, toolCallMode: ToolCallMode): string {
+  const description = tool.description.length > 0 ? tool.description : "No description available.";
+
+  if (toolCallMode === "openai" || toolCallMode === "anthropic") {
+    const sections = [`# Tool Skill: ${tool.name}`, "", "## Detailed Description", description];
+    if (tool.templateOverride) {
+      sections.push("", "## Additional Usage Guidance", tool.templateOverride);
+    }
+    return sections.join("\n");
+  }
+
+  const parameterLines = buildXmlParameterLines(tool);
+  const sections = [`# Tool Skill: ${tool.name}`, "", description];
+  if (tool.templateOverride) {
+    sections.push("", "## Additional Usage Guidance", tool.templateOverride);
+  }
+  sections.push(
+    "",
+    "## XML Usage",
+    "<tool_use>",
+    `  <tool_name>${tool.name}</tool_name>`,
+    "  <parameter>",
+  );
+  sections.push(...parameterLines);
+  sections.push("  </parameter>", "</tool_use>");
+  return sections.join("\n");
+}
+
+function buildLoadSkillTool(
+  tools: Tool[],
+  skills: SkillDefinition[],
+  toolCallMode: ToolCallMode,
+): Tool | null {
   if (tools.some((tool) => tool.name === "LoadSkill")) {
     return null;
   }
@@ -231,7 +299,7 @@ function buildLoadSkillTool(tools: Tool[], skills: SkillDefinition[]): Tool | nu
       skillRegistry.set(tool.name, {
         name: tool.name,
         description: tool.skillDescription,
-        detail: null,
+        detail: buildToolSkillDetail(tool, toolCallMode),
         folder: "",
       });
     }
@@ -404,7 +472,11 @@ export class AgentConfig {
     this.sandbox_config = input.parsed.sandbox_config;
     this.sub_agents = input.subAgents;
 
-    const loadSkillTool = buildLoadSkillTool(this.tools, input.skillDefinitions);
+    const loadSkillTool = buildLoadSkillTool(
+      this.tools,
+      input.skillDefinitions,
+      this.tool_call_mode,
+    );
     if (loadSkillTool) {
       this.tools.push(loadSkillTool);
     }

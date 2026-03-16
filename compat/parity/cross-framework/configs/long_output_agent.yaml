@@ -1,0 +1,28 @@
+name: parity_long_output_agent
+system_prompt: |
+  You are running long tool output compatibility test.
+  Keep outputs concise and deterministic.
+tool_call_mode: openai
+max_context_tokens: 12000
+max_iterations: 6
+retry_attempts: 1
+timeout: 20
+llm_config:
+  model: mock-model
+  base_url: http://127.0.0.1:18080
+  api_key: mock-key
+  api_type: openai_chat_completion
+  stream: false
+middlewares:
+  - import: nexau.archs.main_sub.execution.middleware.long_tool_output:LongToolOutputMiddleware
+    params:
+      max_output_chars: 280
+      head_lines: 4
+      tail_lines: 3
+      head_chars: 100
+      tail_chars: 100
+      temp_dir: null
+tools:
+  - name: read_file
+    yaml_path: ../tools/read_file.tool.yaml
+    binding: nexau.archs.tool.builtin.file_tools:read_file

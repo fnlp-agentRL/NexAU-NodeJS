@@ -102,6 +102,52 @@
       }
     ]
   },
+  "load_skill_toolcall": {
+    "name": "load_skill_toolcall",
+    "user_message": "先加载 save_memory 技能详情，再用一句话结束。",
+    "responses": [
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "skill_call_1",
+            "name": "LoadSkill",
+            "arguments": {
+              "skill_name": "save_memory"
+            }
+          }
+        ]
+      },
+      {
+        "content": "技能详情已读取。",
+        "tool_calls": []
+      }
+    ]
+  },
+  "long_output_toolcall": {
+    "name": "long_output_toolcall",
+    "user_message": "请读取 long_output_notes.md，然后一句话确认完成。",
+    "responses": [
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "long_output_call_1",
+            "name": "read_file",
+            "arguments": {
+              "file_path": "compat/parity/cross-framework/files/long_output_notes.md",
+              "offset": 0,
+              "limit": 200
+            }
+          }
+        ]
+      },
+      {
+        "content": "长输出读取完成。",
+        "tool_calls": []
+      }
+    ]
+  },
   "alias_toolcall": {
     "name": "alias_toolcall",
     "user_message": "请依次调用 Bash、Write、TodoWrite 三个工具，并在最后用一句话总结。",

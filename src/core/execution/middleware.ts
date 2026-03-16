@@ -9,6 +9,7 @@ export interface ExecutionMiddlewareContext {
   agent: AgentConfig;
   input: string;
   history: ChatMessage[];
+  systemPromptAddition?: string;
   agentState: Record<string, unknown>;
   recursionDepth: number;
   signal?: AbortSignal;

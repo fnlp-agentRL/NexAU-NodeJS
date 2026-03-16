@@ -9,6 +9,7 @@ export interface RuntimeRequest {
   user_id?: string;
   session_id?: string;
   history?: ChatMessage[];
+  system_prompt_addition?: string;
   signal?: AbortSignal;
 }
 
@@ -103,6 +104,7 @@ export class RuntimeService {
 
     const result = await this.agent.run(request.input, {
       history,
+      systemPromptAddition: request.system_prompt_addition,
       agentState: session.agentState,
       signal: request.signal,
       traceContext: {

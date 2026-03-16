@@ -25,6 +25,8 @@ function normalizeRuntimeRequest(params: Record<string, unknown>): RuntimeReques
     input: typeof params.input === "string" ? params.input : "",
     user_id: typeof params.user_id === "string" ? params.user_id : undefined,
     session_id: typeof params.session_id === "string" ? params.session_id : undefined,
+    system_prompt_addition:
+      typeof params.system_prompt_addition === "string" ? params.system_prompt_addition : undefined,
     history: Array.isArray(params.history)
       ? (params.history as RuntimeRequest["history"])
       : undefined,

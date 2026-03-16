@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 import type { AgentConfig } from "../agent-config.js";
 import { LLMConfig, type LLMConfigInput } from "../llm-config.js";
@@ -37,6 +39,7 @@ interface LongToolOutputOptions {
   tailLines: number;
   headChars: number;
   tailChars: number;
+  tempDir: string | null;
   bypassToolNames: Set<string>;
 }
 
@@ -214,19 +217,44 @@ async function withRetryAndTimeout<T>(
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
-function renderSystemPrompt(agent: AgentConfig): string | null {
-  if (!agent.system_prompt) {
+function normalizeOptionalPrompt(value: string | undefined): string | null {
+  if (typeof value !== "string") {
     return null;
   }
-
-  if (typeof agent.system_prompt === "string") {
-    return agent.system_prompt.trimEnd();
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
   }
+  return trimmed;
+}
 
-  return agent.system_prompt
-    .map((item) => (typeof item === "string" ? item : item.content))
-    .join("\n\n")
-    .trimEnd();
+function renderSystemPrompt(agent: AgentConfig, systemPromptAddition?: string): string | null {
+  const base = (() => {
+    if (!agent.system_prompt) {
+      return null;
+    }
+
+    if (typeof agent.system_prompt === "string") {
+      return agent.system_prompt.trimEnd();
+    }
+
+    return agent.system_prompt
+      .map((item) => (typeof item === "string" ? item : item.content))
+      .join("\n\n")
+      .trimEnd();
+  })();
+
+  const addition = normalizeOptionalPrompt(systemPromptAddition);
+  if (!base && !addition) {
+    return null;
+  }
+  if (!base) {
+    return addition;
+  }
+  if (!addition) {
+    return base;
+  }
+  return `${base}\n\n${addition}`;
 }
 
 function normalizeToolCalls(response: LLMResponse): ToolCall[] {
@@ -237,8 +265,59 @@ function normalizeToolCalls(response: LLMResponse): ToolCall[] {
   }));
 }
 
+function serializeUnknownPayload(payload: unknown): string {
+  if (typeof payload === "string") {
+    return payload;
+  }
+  try {
+    return JSON.stringify(payload, null, 2);
+  } catch {
+    return String(payload);
+  }
+}
+
 function serializeToolPayload(payload: Record<string, unknown>): string {
-  return JSON.stringify(payload, null, 2);
+  return serializeUnknownPayload(payload);
+}
+
+function stripReturnDisplayField(payload: Record<string, unknown>): {
+  sanitized: Record<string, unknown>;
+  changed: boolean;
+} {
+  if (!("returnDisplay" in payload)) {
+    return {
+      sanitized: payload,
+      changed: false,
+    };
+  }
+  const { returnDisplay: _ignored, ...rest } = payload;
+  return {
+    sanitized: rest,
+    changed: true,
+  };
+}
+
+function formatThousands(value: number): string {
+  return String(Math.max(0, Math.floor(value))).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+function extractToolContentText(payload: Record<string, unknown>): {
+  contentKey: "content" | "result" | null;
+  contentText: string | null;
+} {
+  for (const key of ["content", "result"] as const) {
+    const value = payload[key];
+    if (typeof value === "string") {
+      return {
+        contentKey: key,
+        contentText: value,
+      };
+    }
+  }
+  return {
+    contentKey: null,
+    contentText: null,
+  };
 }
 
 function truncateString(value: string, maxLength: number): string {
@@ -390,18 +469,40 @@ function resolveContextCompactionOptions(
   return null;
 }
 
-function normalizePositiveInteger(value: unknown, defaultValue: number): number {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 1) {
+function parseLongOutputPositiveInteger(
+  value: unknown,
+  fieldName: string,
+  defaultValue: number,
+): number {
+  if (value === undefined) {
     return defaultValue;
   }
-  return Math.floor(value);
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`[LongToolOutputMiddleware] ${fieldName} must be a finite number`);
+  }
+  const parsed = Math.floor(value);
+  if (parsed < 1) {
+    throw new Error(`[LongToolOutputMiddleware] ${fieldName} must be >= 1`);
+  }
+  return parsed;
 }
 
-function normalizeNonNegativeInteger(value: unknown, defaultValue: number): number {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+function parseLongOutputNonNegativeInteger(
+  value: unknown,
+  fieldName: string,
+  defaultValue: number,
+): number {
+  if (value === undefined) {
     return defaultValue;
   }
-  return Math.floor(value);
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`[LongToolOutputMiddleware] ${fieldName} must be a finite number`);
+  }
+  const parsed = Math.floor(value);
+  if (parsed < 0) {
+    throw new Error(`[LongToolOutputMiddleware] ${fieldName} must be >= 0`);
+  }
+  return parsed;
 }
 
 function resolveLongToolOutputOptions(
@@ -454,28 +555,56 @@ function resolveLongToolOutputOptions(
       params && typeof params === "object" && "bypass_tool_names" in params
         ? params.bypass_tool_names
         : undefined;
+    const tempDirRaw =
+      params && typeof params === "object" && "temp_dir" in params ? params.temp_dir : undefined;
 
     const bypassToolNames = new Set<string>();
-    if (Array.isArray(bypassRaw)) {
+    if (bypassRaw !== undefined) {
+      if (!Array.isArray(bypassRaw)) {
+        throw new Error("[LongToolOutputMiddleware] bypass_tool_names must be an array of strings");
+      }
       for (const item of bypassRaw) {
-        if (typeof item === "string" && item.length > 0) {
-          bypassToolNames.add(item);
+        if (typeof item !== "string" || item.length === 0) {
+          throw new Error(
+            "[LongToolOutputMiddleware] bypass_tool_names must contain non-empty strings",
+          );
         }
+        bypassToolNames.add(item);
       }
     }
 
-    const maxOutputChars = normalizePositiveInteger(maxOutputCharsRaw, 10_000);
-    const headChars = normalizeNonNegativeInteger(headCharsRaw, 5_000);
-    const tailChars = normalizeNonNegativeInteger(tailCharsRaw, 5_000);
-    const adjustedHeadChars = Math.min(headChars, maxOutputChars);
-    const adjustedTailChars = Math.min(tailChars, Math.max(0, maxOutputChars - adjustedHeadChars));
+    const maxOutputChars = parseLongOutputPositiveInteger(
+      maxOutputCharsRaw,
+      "max_output_chars",
+      10_000,
+    );
+    const headLines = parseLongOutputNonNegativeInteger(headLinesRaw, "head_lines", 50);
+    const tailLines = parseLongOutputNonNegativeInteger(tailLinesRaw, "tail_lines", 30);
+    const headChars = parseLongOutputNonNegativeInteger(headCharsRaw, "head_chars", 5_000);
+    const tailChars = parseLongOutputNonNegativeInteger(tailCharsRaw, "tail_chars", 5_000);
+    if (headChars + tailChars > maxOutputChars) {
+      throw new Error(
+        "[LongToolOutputMiddleware] head_chars + tail_chars must be <= max_output_chars",
+      );
+    }
+    const tempDir =
+      tempDirRaw === null
+        ? null
+        : typeof tempDirRaw === "string" && tempDirRaw.trim().length > 0
+          ? tempDirRaw
+          : tempDirRaw === undefined || tempDirRaw === ""
+            ? "/tmp/nexau_tool_outputs"
+            : (() => {
+                throw new Error("[LongToolOutputMiddleware] temp_dir must be a string or null");
+              })();
 
     return {
       maxOutputChars,
-      headLines: normalizeNonNegativeInteger(headLinesRaw, 50),
-      tailLines: normalizeNonNegativeInteger(tailLinesRaw, 30),
-      headChars: adjustedHeadChars,
-      tailChars: adjustedTailChars,
+      headLines,
+      tailLines,
+      headChars,
+      tailChars,
+      tempDir,
       bypassToolNames,
     };
   }
@@ -488,17 +617,20 @@ function truncateByLines(text: string, headLines: number, tailLines: number): st
     return null;
   }
 
-  const lines = text.split("\n");
-  if (lines.length <= headLines + tailLines) {
+  const lines = text.match(/.*?(?:\n|$)/g) ?? [];
+  if (lines.length > 0 && lines[lines.length - 1] === "") {
+    lines.pop();
+  }
+  const totalLines = lines.length;
+  if (totalLines <= headLines + tailLines) {
     return text;
   }
 
-  const head = headLines > 0 ? lines.slice(0, headLines).join("\n") : "";
-  const tail = tailLines > 0 ? lines.slice(-tailLines).join("\n") : "";
-  if (head.length > 0 && tail.length > 0) {
-    return `${head}\n...\n${tail}`;
-  }
-  return head.length > 0 ? `${head}\n...` : `...\n${tail}`;
+  const head = headLines > 0 ? lines.slice(0, headLines).join("") : "";
+  const tail = tailLines > 0 ? lines.slice(-tailLines).join("") : "";
+  const omitted = Math.max(0, totalLines - headLines - tailLines);
+  const separator = `\n... [${omitted} lines omitted] ...\n`;
+  return `${head}${separator}${tail}`;
 }
 
 function truncateByChars(text: string, headChars: number, tailChars: number): string | null {
@@ -511,21 +643,92 @@ function truncateByChars(text: string, headChars: number, tailChars: number): st
 
   const head = headChars > 0 ? text.slice(0, headChars) : "";
   const tail = tailChars > 0 ? text.slice(-tailChars) : "";
-  if (head.length > 0 && tail.length > 0) {
-    return `${head}\n...\n${tail}`;
+  const omitted = Math.max(0, text.length - headChars - tailChars);
+  const separator = `\n... [${omitted} chars omitted] ...\n`;
+  return `${head}${separator}${tail}`;
+}
+
+function selectTruncatedText(
+  sourceText: string,
+  lineCandidate: string | null,
+  charCandidate: string | null,
+  maxOutputChars: number,
+): string {
+  const candidates: string[] = [];
+  if (lineCandidate !== null) {
+    candidates.push(lineCandidate);
   }
-  return head.length > 0 ? `${head}\n...` : `...\n${tail}`;
+  if (charCandidate !== null) {
+    candidates.push(charCandidate);
+  }
+  if (candidates.length === 0) {
+    return sourceText;
+  }
+
+  const shortenedCandidates = candidates.filter(
+    (candidate) => candidate.length < sourceText.length,
+  );
+  const effectiveCandidates = shortenedCandidates.length > 0 ? shortenedCandidates : candidates;
+  const validCandidates = effectiveCandidates.filter(
+    (candidate) => candidate.length < maxOutputChars,
+  );
+  if (validCandidates.length > 0) {
+    return validCandidates.reduce((best, candidate) =>
+      candidate.length > best.length ? candidate : best,
+    );
+  }
+
+  if (effectiveCandidates.length === 1) {
+    return effectiveCandidates[0]!;
+  }
+
+  return effectiveCandidates.reduce((best, candidate) =>
+    candidate.length < best.length ? candidate : best,
+  );
+}
+
+function buildTruncatedToolPayload(
+  originalPayload: Record<string, unknown>,
+  truncatedText: string,
+  hint: string,
+  contentKey: "content" | "result" | null,
+): Record<string, unknown> {
+  const combined = `${truncatedText}${hint}`;
+  if (contentKey) {
+    return {
+      ...originalPayload,
+      [contentKey]: combined,
+    };
+  }
+  if ("content" in originalPayload) {
+    return {
+      ...originalPayload,
+      content: combined,
+    };
+  }
+  if ("result" in originalPayload) {
+    return {
+      ...originalPayload,
+      result: combined,
+    };
+  }
+  return {
+    content: combined,
+  };
 }
 
 function applyLongToolOutputGuard(
-  serializedToolResult: string,
+  toolResult: Record<string, unknown>,
   toolName: string,
+  toolCallId: string,
   options: LongToolOutputOptions | null,
 ): {
   content: string;
   truncated: boolean;
   originalChars?: number;
+  savedPath?: string;
 } {
+  const serializedToolResult = serializeToolPayload(toolResult);
   if (!options) {
     return {
       content: serializedToolResult,
@@ -533,32 +736,65 @@ function applyLongToolOutputGuard(
     };
   }
 
-  if (
-    options.bypassToolNames.has(toolName) ||
-    serializedToolResult.length <= options.maxOutputChars
-  ) {
+  if (options.bypassToolNames.has(toolName)) {
     return {
       content: serializedToolResult,
       truncated: false,
     };
   }
 
-  const lineCandidate = truncateByLines(serializedToolResult, options.headLines, options.tailLines);
-  const charCandidate = truncateByChars(serializedToolResult, options.headChars, options.tailChars);
-  const truncatedBody =
-    (lineCandidate && charCandidate
-      ? lineCandidate.length >= charCandidate.length
-        ? lineCandidate
-        : charCandidate
-      : (lineCandidate ?? charCandidate)) ?? serializedToolResult.slice(0, options.maxOutputChars);
+  const outputForMeasurement = stripReturnDisplayField(toolResult).sanitized;
+  const outputText = serializeUnknownPayload(outputForMeasurement);
+  if (outputText.length <= options.maxOutputChars) {
+    return {
+      content: serializedToolResult,
+      truncated: false,
+    };
+  }
 
-  const hint =
-    `\n\n[long_tool_output] truncated tool output (${serializedToolResult.length} chars)` +
-    "; adjust middleware params to keep more context when needed.";
+  const extracted = extractToolContentText(outputForMeasurement);
+  const textToTruncate = extracted.contentText ?? outputText;
+  const textForStats = extracted.contentText ?? outputText;
+  const lineCandidate = truncateByLines(textToTruncate, options.headLines, options.tailLines);
+  const charCandidate = truncateByChars(textToTruncate, options.headChars, options.tailChars);
+  const truncatedBody = selectTruncatedText(
+    textToTruncate,
+    lineCandidate,
+    charCandidate,
+    options.maxOutputChars,
+  );
+
+  let savedPath: string | undefined;
+  if (options.tempDir) {
+    const safeToolName = toolName.replaceAll("/", "_").replaceAll("\\", "_").replaceAll(" ", "_");
+    const shortId = toolCallId.length > 8 ? toolCallId.slice(-8) : toolCallId;
+    const fileName = `${safeToolName}_${shortId}_${Date.now()}.txt`;
+    const filePath = join(options.tempDir, fileName);
+    try {
+      mkdirSync(options.tempDir, { recursive: true });
+      writeFileSync(filePath, outputText, "utf-8");
+      savedPath = filePath;
+    } catch {
+      savedPath = undefined;
+    }
+  }
+
+  const totalChars = textForStats.length;
+  const totalLines = textForStats.split("\n").length;
+  const hint = savedPath
+    ? `\n\n⚠️ [LongToolOutputMiddleware] The full output (${formatThousands(totalChars)} chars, ~${totalLines} lines) has been truncated. The complete output has been saved to:\n  ${savedPath}\nUse the read file tool to view the full content if needed.`
+    : `\n\n⚠️ [LongToolOutputMiddleware] The full output (${formatThousands(totalChars)} chars, ~${totalLines} lines) has been truncated.`;
+  const truncatedPayload = buildTruncatedToolPayload(
+    outputForMeasurement,
+    truncatedBody,
+    hint,
+    extracted.contentKey,
+  );
   return {
-    content: `${truncatedBody}${hint}`,
+    content: serializeToolPayload(truncatedPayload),
     truncated: true,
-    originalChars: serializedToolResult.length,
+    originalChars: totalChars,
+    ...(savedPath ? { savedPath } : {}),
   };
 }
 
@@ -858,6 +1094,7 @@ export class AgentExecutor {
       agent: options.agent,
       input: options.input,
       history: options.history ? [...options.history] : [],
+      systemPromptAddition: options.systemPromptAddition,
       agentState: options.agentState ?? {},
       recursionDepth: options.recursionDepth ?? 0,
       signal: options.signal,
@@ -948,7 +1185,7 @@ export class AgentExecutor {
     const primaryLLMClient: LLMClient = this.deps.createLLMClient(agent);
 
     const messages: ChatMessage[] = [];
-    const systemPrompt = renderSystemPrompt(agent);
+    const systemPrompt = renderSystemPrompt(agent, context.systemPromptAddition);
     if (systemPrompt) {
       messages.push({
         role: "system",
@@ -1049,6 +1286,7 @@ export class AgentExecutor {
       const subResult = await this.execute({
         agent: subAgent,
         input: subInput,
+        systemPromptAddition: context.systemPromptAddition,
         agentState,
         recursionDepth: recursionDepth + 1,
         signal,
@@ -1420,10 +1658,11 @@ export class AgentExecutor {
         const toolResult = toolResults[index]!;
         const toolSummary = summarizeToolResultForEvent(toolResult);
         lastToolResult = toolResult;
-        const serializedToolResult = serializeToolPayload(toolResult);
+        const sanitizedToolResult = stripReturnDisplayField(toolResult).sanitized;
         const guardedToolOutput = applyLongToolOutputGuard(
-          serializedToolResult,
+          sanitizedToolResult,
           toolCall.name,
+          toolCall.id,
           longToolOutput,
         );
 
@@ -1448,6 +1687,9 @@ export class AgentExecutor {
               ? {
                   tool_output_truncated: true,
                   tool_output_original_chars: guardedToolOutput.originalChars,
+                  ...(guardedToolOutput.savedPath
+                    ? { tool_output_saved_path: guardedToolOutput.savedPath }
+                    : {}),
                 }
               : {}),
           },

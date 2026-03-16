@@ -41,6 +41,8 @@ function normalizeRuntimeRequest(body: Record<string, unknown>): RuntimeRequest 
     input: typeof body.input === "string" ? body.input : "",
     user_id: typeof body.user_id === "string" ? body.user_id : undefined,
     session_id: typeof body.session_id === "string" ? body.session_id : undefined,
+    system_prompt_addition:
+      typeof body.system_prompt_addition === "string" ? body.system_prompt_addition : undefined,
     history: Array.isArray(body.history) ? (body.history as RuntimeRequest["history"]) : undefined,
   };
 }
