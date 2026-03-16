@@ -207,9 +207,9 @@ async function runScenario(args) {
       ? resolve(__dirname, "configs/long_context_agent.yaml")
       : args.scenario === "long_output_toolcall"
         ? resolve(__dirname, "configs/long_output_agent.yaml")
-      : args.scenario === "alias_toolcall"
-        ? resolve(__dirname, "configs/alias_parity_agent.yaml")
-        : resolve(__dirname, "configs/prompt_parity_agent.yaml");
+        : args.scenario === "alias_toolcall"
+          ? resolve(__dirname, "configs/alias_parity_agent.yaml")
+          : resolve(__dirname, "configs/prompt_parity_agent.yaml");
 
   const llm = new ScriptedLLMClient(scenario.responses ?? []);
   const config = AgentConfig.fromYaml(configFile, { env: process.env });
