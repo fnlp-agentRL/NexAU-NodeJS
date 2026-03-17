@@ -55,7 +55,11 @@ function toAnthropicMessages(messages: ChatMessage[]): Array<Record<string, unkn
       continue;
     }
 
-    if (message.role === "assistant" && Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
+    if (
+      message.role === "assistant" &&
+      Array.isArray(message.tool_calls) &&
+      message.tool_calls.length > 0
+    ) {
       const contentBlocks: Array<Record<string, unknown>> = [];
       if (message.content && message.content !== "null") {
         contentBlocks.push({

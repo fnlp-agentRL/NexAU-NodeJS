@@ -140,11 +140,9 @@ describe("PromptBuilder", () => {
 
     // Cover defensive internal branches.
     const emptyParts: Array<{ text: string; cache: boolean }> = [];
-    (builder as unknown as { appendSuffixAndNexauMd: (...args: unknown[]) => void }).appendSuffixAndNexauMd(
-      emptyParts,
-      agent,
-      {},
-    );
+    (
+      builder as unknown as { appendSuffixAndNexauMd: (...args: unknown[]) => void }
+    ).appendSuffixAndNexauMd(emptyParts, agent, {});
     expect(emptyParts).toEqual([]);
     expect(
       (

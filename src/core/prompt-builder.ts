@@ -284,7 +284,11 @@ export class PromptBuilder {
   }
 
   private buildToolsDocumentation(tools: Tool[]): string {
-    const lines: string[] = ["", "## Available Tools", "You can use tools by including XML blocks in your response:"];
+    const lines: string[] = [
+      "",
+      "## Available Tools",
+      "You can use tools by including XML blocks in your response:",
+    ];
     for (const tool of tools) {
       lines.push("", `### ${tool.name}`);
       if (tool.asSkill) {
@@ -318,7 +322,11 @@ export class PromptBuilder {
     if (names.length === 0) {
       return "";
     }
-    const lines: string[] = ["", "## Available Sub-Agents", "You can delegate tasks to specialized sub-agents:"];
+    const lines: string[] = [
+      "",
+      "## Available Sub-Agents",
+      "You can delegate tasks to specialized sub-agents:",
+    ];
     for (const name of names) {
       const description =
         subAgents[name]?.description ?? `Specialized agent for ${name}-related tasks`;

@@ -21,12 +21,12 @@ describe("PromptHandler", () => {
     expect(handler.processPrompt("A={{value}}", "string", { value: 3 })).toBe("A=3");
     expect(handler.processPrompt("", "string", { value: 3 })).toBe("");
     expect(handler.processPrompt("Raw text", "string")).toBe("Raw text");
-    expect(handler.processPrompt(promptPath, "file", { agent_name: "agent", date: "2026-03-18" })).toBe(
-      "Hello agent at 2026-03-18.",
-    );
-    expect(handler.processPrompt(promptPath, "jinja", { agent_name: "agent", date: "2026-03-18" })).toBe(
-      "Hello agent at 2026-03-18.",
-    );
+    expect(
+      handler.processPrompt(promptPath, "file", { agent_name: "agent", date: "2026-03-18" }),
+    ).toBe("Hello agent at 2026-03-18.");
+    expect(
+      handler.processPrompt(promptPath, "jinja", { agent_name: "agent", date: "2026-03-18" }),
+    ).toBe("Hello agent at 2026-03-18.");
   });
 
   it("creates dynamic prompts and rejects invalid prompt types", () => {
@@ -49,11 +49,16 @@ describe("PromptHandler", () => {
     expect(renderedWithDefaults).toContain("Agent=Unknown Agent");
     expect(renderedWithDefaults).toContain("Type=string");
 
+    expect(() => handler.processPrompt("x", "invalid" as never, {})).toThrowError(
+      "Invalid prompt type: invalid",
+    );
     expect(() =>
-      handler.processPrompt("x", "invalid" as never, {}),
-    ).toThrowError("Invalid prompt type: invalid");
-    expect(() =>
-      handler.createDynamicPrompt("x", { name: "demo", system_prompt_type: "string" }, {}, "invalid" as never),
+      handler.createDynamicPrompt(
+        "x",
+        { name: "demo", system_prompt_type: "string" },
+        {},
+        "invalid" as never,
+      ),
     ).toThrowError("Invalid template type: invalid");
   });
 });

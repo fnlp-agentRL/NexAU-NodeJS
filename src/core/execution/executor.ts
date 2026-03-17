@@ -279,7 +279,10 @@ function parseXmlToolArgumentValue(rawValue: string): unknown {
   if (!value) {
     return "";
   }
-  if ((value.startsWith("{") && value.endsWith("}")) || (value.startsWith("[") && value.endsWith("]"))) {
+  if (
+    (value.startsWith("{") && value.endsWith("}")) ||
+    (value.startsWith("[") && value.endsWith("]"))
+  ) {
     try {
       return JSON.parse(value) as unknown;
     } catch {
@@ -335,7 +338,9 @@ function parseXmlToolCallFragment(fragment: string): ToolCall | null {
 
 function parseXmlToolCalls(content: string): ToolCall[] {
   const calls: ToolCall[] = [];
-  const parallelMatches = [...content.matchAll(/<use_parallel_tool_calls>([\s\S]*?)<\/use_parallel_tool_calls>/gi)];
+  const parallelMatches = [
+    ...content.matchAll(/<use_parallel_tool_calls>([\s\S]*?)<\/use_parallel_tool_calls>/gi),
+  ];
   for (const parallel of parallelMatches) {
     const body = parallel[1] ?? "";
     for (const fragment of body.matchAll(/<parallel_tool>([\s\S]*?)<\/parallel_tool>/gi)) {
