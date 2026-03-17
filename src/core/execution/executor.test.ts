@@ -184,6 +184,38 @@ describe("AgentExecutor", () => {
     expect(systemMessage?.content).toContain("Dynamic instruction");
   });
 
+  it("renders jinja-style variables in system prompt files", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-executor-jinja-system-"));
+    buildToolYaml(dir);
+    const promptPath = join(dir, "systemprompt.md");
+    writeFileSync(promptPath, "Today is {{date}}.");
+    const configPath = buildAgentYaml(dir, {
+      extraLines: ["system_prompt: ./systemprompt.md", "system_prompt_type: jinja"],
+    });
+
+    const config = AgentConfig.fromYaml(configPath);
+    const scripted = new ScriptedLLMClient([
+      {
+        content: "ok",
+      },
+    ]);
+
+    const executor = new AgentExecutor({
+      createLLMClient: () => scripted,
+    });
+
+    await executor.execute({
+      agent: config,
+      input: "hello",
+    });
+
+    const firstCall = scripted.calls[0];
+    const systemMessage = firstCall?.messages.find((message) => message.role === "system");
+    expect(systemMessage).toBeTruthy();
+    expect(systemMessage?.content).toContain("Today is ");
+    expect(systemMessage?.content).not.toContain("{{date}}");
+  });
+
   it("emits prompt/tool token estimates in llm.requested", async () => {
     const dir = mkdtempSync(join(tmpdir(), "nexau-executor-token-"));
     buildToolYaml(dir);
@@ -353,6 +385,152 @@ describe("AgentExecutor", () => {
           event.type === "subagent.completed" && event.payload.sub_agent_name === "child_agent",
       ),
     ).toBe(true);
+  });
+
+  it("includes canonical sub-agent tools in structured openai payload", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-executor-subagent-payload-"));
+    buildToolYaml(dir);
+    buildSubAgentYaml(dir);
+    const configPath = buildAgentYaml(dir, {
+      subAgentPath: "./child.yaml",
+      extraLines: ["tool_call_mode: openai"],
+    });
+    const config = AgentConfig.fromYaml(configPath);
+
+    const scripted = new ScriptedLLMClient([{ content: "ok" }]);
+    const executor = new AgentExecutor({
+      createLLMClient: () => scripted,
+    });
+
+    const result = await executor.execute({
+      agent: config,
+      input: "hello",
+      agentState: {},
+    });
+
+    expect(result.status).toBe("completed");
+    expect(
+      scripted.calls[0]?.tools.some((tool) => {
+        const fn = tool.function as { name?: string } | undefined;
+        return fn?.name === "sub-agent-child_agent";
+      }),
+    ).toBe(true);
+  });
+
+  it("uses anthropic tool payload shape when tool_call_mode is anthropic", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-executor-anthropic-payload-"));
+    buildToolYaml(dir);
+    const configPath = buildAgentYaml(dir, {
+      extraLines: ["tool_call_mode: anthropic"],
+    });
+    const config = AgentConfig.fromYaml(configPath);
+
+    const scripted = new ScriptedLLMClient([{ content: "ok" }]);
+    const executor = new AgentExecutor({
+      createLLMClient: () => scripted,
+    });
+
+    await executor.execute({
+      agent: config,
+      input: "hello",
+    });
+
+    const firstTool = scripted.calls[0]?.tools[0] as
+      | { name?: string; input_schema?: unknown; function?: unknown }
+      | undefined;
+    expect(firstTool).toBeTruthy();
+    expect(typeof firstTool?.name).toBe("string");
+    expect(firstTool?.input_schema).toBeTruthy();
+    expect(firstTool?.function).toBeUndefined();
+  });
+
+  it("parses xml tool calls in xml mode and executes them", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-executor-xml-mode-"));
+    buildToolYaml(dir);
+    const configPath = buildAgentYaml(dir, {
+      extraLines: ["tool_call_mode: xml", "system_prompt: |", "  XML mode agent."],
+    });
+    const config = AgentConfig.fromYaml(configPath);
+
+    const scripted = new ScriptedLLMClient([
+      {
+        content: `<tool_use>
+  <tool_name>write_todos</tool_name>
+  <parameter>
+    <todos>[{"description":"item","status":"in_progress"}]</todos>
+  </parameter>
+</tool_use>`,
+      },
+      {
+        content: "final",
+      },
+    ]);
+
+    const executor = new AgentExecutor({
+      createLLMClient: () => scripted,
+    });
+
+    const result = await executor.execute({
+      agent: config,
+      input: "run xml call",
+      agentState: {},
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.output).toBe("final");
+    expect(
+      result.events.some(
+        (event) => event.type === "tool.called" && event.payload.tool_name === "write_todos",
+      ),
+    ).toBe(true);
+    expect(scripted.calls[0]?.tools.length).toBe(0);
+    const systemMessage = scripted.calls[0]?.messages.find((message) => message.role === "system");
+    expect(systemMessage?.content).toContain("CRITICAL TOOL EXECUTION INSTRUCTIONS");
+    expect(systemMessage?.content).toContain("## Available Tools");
+  });
+
+  it("parses parallel xml tool calls", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nexau-executor-xml-parallel-"));
+    buildToolYaml(dir);
+    const configPath = buildAgentYaml(dir, {
+      extraLines: ["tool_call_mode: xml"],
+    });
+    const config = AgentConfig.fromYaml(configPath);
+
+    const scripted = new ScriptedLLMClient([
+      {
+        content: `<use_parallel_tool_calls>
+<parallel_tool>
+  <tool_name>write_todos</tool_name>
+  <parameter>
+    <todos>[{"description":"a","status":"in_progress"}]</todos>
+  </parameter>
+</parallel_tool>
+<parallel_tool>
+  <tool_name>write_todos</tool_name>
+  <parameter>
+    <todos>[{"description":"b","status":"completed"}]</todos>
+  </parameter>
+</parallel_tool>
+</use_parallel_tool_calls>`,
+      },
+      { content: "done" },
+    ]);
+
+    const executor = new AgentExecutor({
+      createLLMClient: () => scripted,
+    });
+    const result = await executor.execute({
+      agent: config,
+      input: "parallel xml",
+      agentState: {},
+    });
+
+    expect(result.status).toBe("completed");
+    const calledEvents = result.events.filter(
+      (event) => event.type === "tool.called" && event.payload.tool_name === "write_todos",
+    );
+    expect(calledEvents.length).toBe(2);
   });
 
   it("retries transient llm failure and applies context compaction", async () => {

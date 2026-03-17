@@ -19,4 +19,20 @@ describe("createDefaultExecutorDeps", () => {
     const client = deps.createLLMClient(agent);
     expect(typeof client.complete).toBe("function");
   });
+
+  it("creates anthropic client when api_type is anthropic_chat_completion", () => {
+    const agent = {
+      llm_config: {
+        model: "claude-test",
+        base_url: "https://api.anthropic.com",
+        api_key: "k",
+        api_type: "anthropic_chat_completion",
+        extra_params: {},
+      },
+    } as unknown as AgentConfig;
+
+    const deps = createDefaultExecutorDeps();
+    const client = deps.createLLMClient(agent);
+    expect(typeof client.complete).toBe("function");
+  });
 });

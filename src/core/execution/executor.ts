@@ -4,6 +4,12 @@ import { join } from "node:path";
 
 import type { AgentConfig } from "../agent-config.js";
 import { LLMConfig, type LLMConfigInput } from "../llm-config.js";
+import { PromptBuilder } from "../prompt-builder.js";
+import {
+  buildSubAgentToolName,
+  extractSubAgentName,
+  LEGACY_SUB_AGENT_TOOL_PREFIX,
+} from "../sub-agent-naming.js";
 import type {
   ChatMessage,
   ExecuteOptions,
@@ -26,6 +32,7 @@ import { resolveTracer } from "../../tracer/resolve.js";
 const MAX_SUBAGENT_DEPTH = 6;
 const EXECUTION_INTERRUPTED_MESSAGE = "Execution interrupted";
 const COMPACTED_TOOL_RESULT_PLACEHOLDER = "Tool call result has been compacted";
+const promptBuilder = new PromptBuilder();
 
 interface ContextCompactionOptions {
   strategy: "tool_result_compaction";
@@ -229,20 +236,21 @@ function normalizeOptionalPrompt(value: string | undefined): string | null {
 }
 
 function renderSystemPrompt(agent: AgentConfig, systemPromptAddition?: string): string | null {
-  const base = (() => {
-    if (!agent.system_prompt) {
-      return null;
-    }
+  const runtimeContext: Record<string, unknown> = {
+    date: new Date().toISOString().slice(0, 10),
+  };
+  const parts = promptBuilder.buildSystemPrompt(
+    agent,
+    agent.tools,
+    agent.sub_agents,
+    runtimeContext,
+    agent.tool_call_mode === "xml",
+  );
 
-    if (typeof agent.system_prompt === "string") {
-      return agent.system_prompt.trimEnd();
-    }
-
-    return agent.system_prompt
-      .map((item) => (typeof item === "string" ? item : item.content))
-      .join("\n\n")
-      .trimEnd();
-  })();
+  const base = parts
+    .map((part) => part.text)
+    .join("\n\n")
+    .trim();
 
   const addition = normalizeOptionalPrompt(systemPromptAddition);
   if (!base && !addition) {
@@ -255,6 +263,98 @@ function renderSystemPrompt(agent: AgentConfig, systemPromptAddition?: string): 
     return base;
   }
   return `${base}\n\n${addition}`;
+}
+
+function decodeXmlEntities(value: string): string {
+  return value
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&amp;", "&")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#39;", "'");
+}
+
+function parseXmlToolArgumentValue(rawValue: string): unknown {
+  const value = decodeXmlEntities(rawValue.trim());
+  if (!value) {
+    return "";
+  }
+  if ((value.startsWith("{") && value.endsWith("}")) || (value.startsWith("[") && value.endsWith("]"))) {
+    try {
+      return JSON.parse(value) as unknown;
+    } catch {
+      return value;
+    }
+  }
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  if (value === "null") {
+    return null;
+  }
+  if (!Number.isNaN(Number(value)) && /^-?\d+(\.\d+)?$/.test(value)) {
+    return Number(value);
+  }
+  return value;
+}
+
+function parseXmlToolParameters(xml: string): Record<string, unknown> {
+  const parameterMatch = xml.match(/<parameter>([\s\S]*?)<\/parameter>/i);
+  if (!parameterMatch) {
+    return {};
+  }
+  const body = parameterMatch[1] ?? "";
+  const args: Record<string, unknown> = {};
+  const paramPattern = /<([a-zA-Z_][\w:-]*)>([\s\S]*?)<\/\1>/g;
+  for (const match of body.matchAll(paramPattern)) {
+    const name = match[1];
+    const value = match[2];
+    if (!name || value === undefined) {
+      continue;
+    }
+    args[name] = parseXmlToolArgumentValue(value);
+  }
+  return args;
+}
+
+function parseXmlToolCallFragment(fragment: string): ToolCall | null {
+  const toolNameMatch = fragment.match(/<tool_name>\s*([^<]+)\s*<\/tool_name>/i);
+  const toolName = toolNameMatch?.[1]?.trim();
+  if (!toolName) {
+    return null;
+  }
+  return {
+    id: randomUUID(),
+    name: toolName,
+    arguments: parseXmlToolParameters(fragment),
+  };
+}
+
+function parseXmlToolCalls(content: string): ToolCall[] {
+  const calls: ToolCall[] = [];
+  const parallelMatches = [...content.matchAll(/<use_parallel_tool_calls>([\s\S]*?)<\/use_parallel_tool_calls>/gi)];
+  for (const parallel of parallelMatches) {
+    const body = parallel[1] ?? "";
+    for (const fragment of body.matchAll(/<parallel_tool>([\s\S]*?)<\/parallel_tool>/gi)) {
+      const call = parseXmlToolCallFragment(fragment[1] ?? "");
+      if (call) {
+        calls.push(call);
+      }
+    }
+  }
+  if (calls.length > 0) {
+    return calls;
+  }
+  for (const fragment of content.matchAll(/<tool_use>([\s\S]*?)<\/tool_use>/gi)) {
+    const call = parseXmlToolCallFragment(fragment[1] ?? "");
+    if (call) {
+      calls.push(call);
+    }
+  }
+  return calls;
 }
 
 function normalizeToolCalls(response: LLMResponse): ToolCall[] {
@@ -384,29 +484,124 @@ function resolveStructuredToolDescription(tool: AgentConfig["tools"][number]): s
   return tool.description;
 }
 
-function buildStructuredToolPayload(
+function shouldIncludeSubAgentInPayload(
+  subAgentName: string,
+  selectedToolNames?: Set<string>,
+): boolean {
+  if (!selectedToolNames) {
+    return true;
+  }
+  const canonical = buildSubAgentToolName(subAgentName);
+  const legacy = `${LEGACY_SUB_AGENT_TOOL_PREFIX}${subAgentName}`;
+  return (
+    selectedToolNames.has(canonical) ||
+    selectedToolNames.has(legacy) ||
+    selectedToolNames.has(subAgentName)
+  );
+}
+
+function buildOpenAIToolPayload(
   agent: AgentConfig,
   selectedToolNames?: Set<string>,
 ): Array<Record<string, unknown>> {
-  return agent.tools.flatMap((tool) => {
+  const payload: Array<Record<string, unknown>> = [];
+  for (const tool of agent.tools) {
     if (selectedToolNames && !selectedToolNames.has(tool.name)) {
-      return [];
+      continue;
     }
-    const payload = tool.toOpenAI();
-    const fn = payload.function;
+    const toolPayload = tool.toOpenAI();
+    const fn = toolPayload.function;
     if (fn && typeof fn === "object") {
-      return [
-        {
-          ...payload,
-          function: {
-            ...fn,
-            description: resolveStructuredToolDescription(tool),
+      payload.push({
+        ...toolPayload,
+        function: {
+          ...fn,
+          description: resolveStructuredToolDescription(tool),
+        },
+      });
+      continue;
+    }
+    payload.push(toolPayload);
+  }
+
+  for (const subAgentName of Object.keys(agent.sub_agents)) {
+    if (!shouldIncludeSubAgentInPayload(subAgentName, selectedToolNames)) {
+      continue;
+    }
+    payload.push({
+      type: "function",
+      function: {
+        name: buildSubAgentToolName(subAgentName),
+        description:
+          agent.sub_agents[subAgentName]?.description ??
+          `Delegate work to sub-agent '${subAgentName}'.`,
+        parameters: {
+          type: "object",
+          properties: {
+            message: {
+              type: "string",
+              description: "Task or question for the sub-agent.",
+            },
+          },
+          required: ["message"],
+        },
+      },
+    });
+  }
+  return payload;
+}
+
+function buildAnthropicToolPayload(
+  agent: AgentConfig,
+  selectedToolNames?: Set<string>,
+): Array<Record<string, unknown>> {
+  const payload: Array<Record<string, unknown>> = [];
+  for (const tool of agent.tools) {
+    if (selectedToolNames && !selectedToolNames.has(tool.name)) {
+      continue;
+    }
+    const toolPayload = tool.toAnthropic();
+    payload.push({
+      ...toolPayload,
+      description: resolveStructuredToolDescription(tool),
+    });
+  }
+
+  for (const subAgentName of Object.keys(agent.sub_agents)) {
+    if (!shouldIncludeSubAgentInPayload(subAgentName, selectedToolNames)) {
+      continue;
+    }
+    payload.push({
+      name: buildSubAgentToolName(subAgentName),
+      description:
+        agent.sub_agents[subAgentName]?.description ??
+        `Delegate work to sub-agent '${subAgentName}'.`,
+      input_schema: {
+        type: "object",
+        properties: {
+          message: {
+            type: "string",
+            description: "Task or question for the sub-agent.",
           },
         },
-      ];
-    }
-    return [payload];
-  });
+        required: ["message"],
+      },
+    });
+  }
+  return payload;
+}
+
+function buildToolCallPayload(
+  agent: AgentConfig,
+  selectedToolNames?: Set<string>,
+): Array<Record<string, unknown>> {
+  if (agent.tool_call_mode === "openai") {
+    return buildOpenAIToolPayload(agent, selectedToolNames);
+  }
+  if (agent.tool_call_mode === "anthropic") {
+    return buildAnthropicToolPayload(agent, selectedToolNames);
+  }
+  return [];
 }
 
 function normalizeThreshold(value: unknown, defaultValue: number): number {
@@ -1024,12 +1219,35 @@ function toolMap(agent: AgentConfig): Map<string, AgentConfig["tools"][number]> 
   return map;
 }
 
+function listAllCallableToolNames(agent: AgentConfig): string[] {
+  const names = new Set<string>(agent.tools.map((tool) => tool.name));
+  for (const subAgentName of Object.keys(agent.sub_agents)) {
+    names.add(buildSubAgentToolName(subAgentName));
+  }
+  return [...names];
+}
+
+function addSubAgentToolNames(
+  selectedToolNames: string[],
+  subAgents: Record<string, AgentConfig>,
+): string[] {
+  const merged = new Set<string>(selectedToolNames);
+  for (const subAgentName of Object.keys(subAgents)) {
+    merged.add(buildSubAgentToolName(subAgentName));
+  }
+  return [...merged];
+}
+
 function resolveSubAgentName(
   toolCall: ToolCall,
   subAgents: Record<string, AgentConfig>,
 ): string | null {
   if (toolCall.name in subAgents) {
     return toolCall.name;
+  }
+  const extracted = extractSubAgentName(toolCall.name);
+  if (extracted && extracted in subAgents) {
+    return extracted;
   }
 
   if (!["RecallSubAgent", "recall_sub_agent", "recall_subagent"].includes(toolCall.name)) {
@@ -1040,8 +1258,14 @@ function resolveSubAgentName(
 
   for (const key of candidateKeys) {
     const value = toolCall.arguments[key];
-    if (typeof value === "string" && value in subAgents) {
-      return value;
+    if (typeof value === "string") {
+      if (value in subAgents) {
+        return value;
+      }
+      const extractedFromArg = extractSubAgentName(value);
+      if (extractedFromArg && extractedFromArg in subAgents) {
+        return extractedFromArg;
+      }
     }
   }
 
@@ -1208,7 +1432,7 @@ export class AgentExecutor {
     });
 
     const toolByName = toolMap(agent);
-    const allToolNames = agent.tools.map((tool) => tool.name);
+    const allToolNames = listAllCallableToolNames(agent);
     const agentState = context.agentState;
     const contextCompaction = resolveContextCompactionOptions(agent.middlewares);
     const longToolOutput = resolveLongToolOutputOptions(agent.middlewares);
@@ -1372,9 +1596,11 @@ export class AgentExecutor {
           });
           selectorTrace = selection.trace;
 
-          const candidate = selection.selectedToolNames.filter((name) => toolByName.has(name));
+          const candidate = selection.selectedToolNames.filter((name) =>
+            allToolNames.includes(name),
+          );
           if (candidate.length > 0) {
-            selectedToolNames = [...new Set(candidate)];
+            selectedToolNames = addSubAgentToolNames([...new Set(candidate)], agent.sub_agents);
           } else {
             selectorFallbackToAll = true;
             selectedToolNames = allToolNames;
@@ -1401,7 +1627,7 @@ export class AgentExecutor {
         });
       }
 
-      const tools = buildStructuredToolPayload(agent, new Set(selectedToolNames));
+      const tools = buildToolCallPayload(agent, new Set(selectedToolNames));
       const tokenUsage = estimatePromptTokenUsage(messages, tools);
 
       emit({
@@ -1530,7 +1756,10 @@ export class AgentExecutor {
         }
       }
 
-      const toolCalls = normalizeToolCalls(response);
+      let toolCalls = normalizeToolCalls(response);
+      if (toolCalls.length === 0 && agent.tool_call_mode === "xml") {
+        toolCalls = parseXmlToolCalls(response.content);
+      }
 
       output = response.content;
       const assistantContent =
