@@ -138,4 +138,45 @@ describe("tool selector", () => {
     expect(detectedLinkCount).toBeGreaterThan(0);
     expect(linkSignalDomains).toContain("base");
   });
+
+  it("forces single tool after configured iteration", async () => {
+    const selector = new HybridToolSelector({
+      enabled: true,
+      top_k: 8,
+      per_domain_k: 4,
+      single_tool_name: "feishu_calendar_freebusy",
+      single_tool_after_iteration: 2,
+    });
+
+    const tools = [
+      buildTool("LoadSkill", "load a skill"),
+      buildTool("feishu_calendar_freebusy", "query freebusy", [
+        "user_ids",
+        "start_time",
+        "end_time",
+      ]),
+      buildTool("feishu_calendar_event", "list events", ["calendar_id"]),
+      buildTool("feishu_task_task", "list tasks", ["tasklist_guid"]),
+    ];
+
+    const round1 = await selector.select({
+      query: "查询忙闲",
+      tools,
+      messages: [],
+      agentState: {},
+      iteration: 1,
+    });
+    expect(round1.selectedToolNames.length).toBeGreaterThan(1);
+
+    const round2 = await selector.select({
+      query: "查询忙闲",
+      tools,
+      messages: [],
+      agentState: {},
+      iteration: 2,
+    });
+
+    expect(round2.selectedToolNames).toEqual(["feishu_calendar_freebusy"]);
+    expect((round2.trace as Record<string, unknown>).forced_single_tool).toBe(true);
+  });
 });

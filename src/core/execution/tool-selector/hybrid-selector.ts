@@ -12,6 +12,8 @@ interface HybridSelectorOptions {
   readonly_mode?: boolean;
   risky_write_tools?: unknown;
   always_include_tools?: unknown;
+  single_tool_name?: unknown;
+  single_tool_after_iteration?: unknown;
 }
 
 interface ScoredTool {
@@ -95,6 +97,14 @@ function normalizeStringArray(value: unknown): string[] {
     }
   }
   return parsed;
+}
+
+function normalizeNonEmptyString(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 function normalizePositiveInteger(value: unknown, fallback: number): number {
@@ -310,6 +320,8 @@ export class HybridToolSelector implements ToolSelector {
   private readonly readonlyMode: boolean;
   private readonly riskyWriteTools: Set<string>;
   private readonly alwaysIncludeTools: Set<string>;
+  private readonly singleToolName: string | null;
+  private readonly singleToolAfterIteration: number | null;
   private readonly domainHintsRaw?: Record<string, unknown>;
 
   public constructor(options: HybridSelectorOptions = {}) {
@@ -324,6 +336,10 @@ export class HybridToolSelector implements ToolSelector {
       "LoadSkill",
       ...normalizeStringArray(options.always_include_tools),
     ]);
+    this.singleToolName = normalizeNonEmptyString(options.single_tool_name);
+    this.singleToolAfterIteration = this.singleToolName
+      ? normalizePositiveInteger(options.single_tool_after_iteration, 2)
+      : null;
 
     if (options.domains && typeof options.domains === "object" && !Array.isArray(options.domains)) {
       this.domainHintsRaw = options.domains as Record<string, unknown>;
@@ -332,6 +348,45 @@ export class HybridToolSelector implements ToolSelector {
 
   public select(input: ToolSelectorInput): ToolSelectorResult {
     const allToolNames = input.tools.map((tool) => tool.name);
+
+    if (
+      this.singleToolName &&
+      this.singleToolAfterIteration !== null &&
+      input.iteration >= this.singleToolAfterIteration
+    ) {
+      if (allToolNames.includes(this.singleToolName)) {
+        return {
+          selectedToolNames: [this.singleToolName],
+          trace: {
+            mode: "hybrid",
+            enabled: true,
+            iteration: input.iteration,
+            total_count: allToolNames.length,
+            selected_count: 1,
+            forced_single_tool: true,
+            forced_tool_name: this.singleToolName,
+            forced_after_iteration: this.singleToolAfterIteration,
+            fallback_to_all: false,
+          },
+        };
+      }
+
+      return {
+        selectedToolNames: allToolNames,
+        trace: {
+          mode: "hybrid",
+          enabled: true,
+          iteration: input.iteration,
+          total_count: allToolNames.length,
+          selected_count: allToolNames.length,
+          forced_single_tool: true,
+          forced_tool_name: this.singleToolName,
+          forced_after_iteration: this.singleToolAfterIteration,
+          fallback_to_all: true,
+          reason: "forced tool is not available in current tool registry",
+        },
+      };
+    }
 
     if (!this.enabled) {
       return {
